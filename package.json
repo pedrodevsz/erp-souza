@@ -1,0 +1,46 @@
+{
+  "name": "front-end",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack --hostname 127.0.0.1 --port 3001",
+    "build": "next build",
+    "start": "next start",
+    "test": "node --import tsx --test src/lib/purchase-invoice.test.ts src/lib/dashboard.test.ts src/server/schemas/purchases/purchase-import.schema.test.ts src/server/services/purchases/import-invoice.service.test.ts",
+    "lint": "eslint",
+    "migrate:uppercase": "node scripts/normalize-uppercase.mjs",
+    "migrate:legacy-user-data": "node scripts/migrate-legacy-user-data.mjs",
+    "fix:customer-indexes": "node --import tsx scripts/fix-customer-indexes.ts"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
+    "@next/env": "^16.2.9",
+    "bcryptjs": "^3.0.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.17.0",
+    "mongoose": "^9.7.0",
+    "next": "16.2.9",
+    "openai": "^6.48.0",
+    "radix-ui": "^1.5.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-hook-form": "^7.78.0",
+    "shadcn": "^4.11.0",
+    "tailwind-merge": "^3.6.0",
+    "tw-animate-css": "^1.4.0",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.1",
+    "typescript": "^5"
+  }
+}
