@@ -44,7 +44,6 @@ const purchaseItemSchema = z.object({
 
 const purchaseBaseSchema = z.object({
   supplier: z.string().trim().min(2, 'Fornecedor é obrigatório.').transform(normalizeTextInput),
-  purchaseDate: z.string().trim().min(1, 'Data da compra é obrigatória.'),
   expectedDelivery: z.preprocess(normalizeTextValue, z.string().trim().transform(normalizeTextInput).nullable().optional()),
   paymentCondition: purchasePaymentConditionInputSchema,
   paymentMethod: z.preprocess(normalizeTextValue, z.string().trim().transform(normalizeTextInput).nullable().optional()),

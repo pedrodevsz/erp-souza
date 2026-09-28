@@ -97,7 +97,6 @@ export function PurchaseForm({ initialValues, onSubmit, onCancel, submitLabel }:
 
     const [supplier, setSupplier] = useState(normalized.supplier ?? '')
     const [supplierQuery, setSupplierQuery] = useState(normalized.supplier ?? '')
-    const [purchaseDate, setPurchaseDate] = useState(normalized.purchaseDate ? normalized.purchaseDate.slice(0, 10) : '')
     const [paymentCondition, setPaymentCondition] = useState(() => {
         const initial = normalizePurchasePaymentCondition(normalized.paymentCondition)
         return initial.length > 0 ? initial : createEmptyPurchasePaymentCondition()
@@ -337,7 +336,6 @@ export function PurchaseForm({ initialValues, onSubmit, onCancel, submitLabel }:
 
         const payload: NewPurchase = {
             supplier: normalizeTextInput(supplier),
-            purchaseDate: purchaseDate ? new Date(purchaseDate).toISOString() : new Date().toISOString(),
             expectedDelivery: null,
             paymentCondition: normalizePurchasePaymentCondition(paymentCondition),
             paymentMethod: normalizeTextInput(paymentMethod) || null,
@@ -396,8 +394,6 @@ export function PurchaseForm({ initialValues, onSubmit, onCancel, submitLabel }:
                         onSupplierQueryChange={handleSupplierQueryChange}
                         onSupplierSelect={handleSupplierSelect}
                         onOpenNewSupplier={() => setNewSupplierOpen(true)}
-                        purchaseDate={purchaseDate}
-                        onPurchaseDateChange={setPurchaseDate}
                         invoiceNumber={invoiceNumber}
                         onInvoiceNumberChange={setInvoiceNumber}
                         suppliers={suppliers}

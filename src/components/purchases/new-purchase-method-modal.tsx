@@ -2,7 +2,9 @@
 
 import type { ComponentType } from 'react'
 import { FileUp, PenSquare, X } from 'lucide-react'
+import { PURCHASE_IMPORT_UNAVAILABLE_MESSAGE, PURCHASE_MANUAL_ROUTE } from '@/lib/purchase-import'
 import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/ui/toast-provider'
 
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui'
 
@@ -41,6 +43,13 @@ function ChoiceCard({
 
 export function NewPurchaseMethodModal({ open, onOpenChange }: Props) {
   const router = useRouter()
+  const toast = useToast()
+
+  const openManualPurchase = () => {
+    onOpenChange(false)
+    toast.push({ title: 'Importação indisponível', description: PURCHASE_IMPORT_UNAVAILABLE_MESSAGE, type: 'error' })
+    router.push(PURCHASE_MANUAL_ROUTE)
+  }
 
   const closeAndNavigate = (href: string) => {
     onOpenChange(false)
@@ -73,9 +82,9 @@ export function NewPurchaseMethodModal({ open, onOpenChange }: Props) {
 
             <ChoiceCard
               title="Importar nota fiscal"
-              description="Envie PDF, JPG, JPEG ou PNG para preencher o formulário automaticamente."
+              description="Temporariamente indisponível. Use o preenchimento manual."
               icon={FileUp}
-              onClick={() => closeAndNavigate('/dashboard/purchases/import-invoice')}
+              onClick={openManualPurchase}
             />
           </div>
         </div>
