@@ -14,9 +14,9 @@ function normalizeError(error: unknown) {
 }
 
 export const AuthService = {
-  async login(name: string, password: string): Promise<SessionUser> {
+  async login(username: string, password: string): Promise<SessionUser> {
     try {
-      const { user } = await apiLogin({ name, password })
+      const { user } = await apiLogin({ username, password })
       return user
     } catch (error) {
       throw normalizeError(error)

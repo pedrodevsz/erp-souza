@@ -42,7 +42,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export type LoginInput = {
-  name: string
+  username: string
   password: string
 }
 
@@ -60,5 +60,5 @@ export async function logout() {
 }
 
 export async function getSession() {
-  return request<{ user: SessionUser | null }>('/api/auth/session')
+  return request<{ user: SessionUser }>('/api/auth/me')
 }

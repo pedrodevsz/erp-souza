@@ -14,7 +14,12 @@ type SessionTokenPayload = SessionUser & {
 }
 
 function getSecret() {
-  return process.env.AUTH_SECRET ?? process.env.MONGODB_URI ?? 'sis-sz-auth-secret'
+  const secret = process.env.AUTH_SECRET
+  if (!secret) {
+    throw new Error('AUTH_SECRET não configurado.')
+  }
+
+  return secret
 }
 
 function toBase64Url(bytes: Uint8Array) {
@@ -77,7 +82,7 @@ export async function verifySessionToken(token: string): Promise<SessionUser | n
   try {
     const payload = JSON.parse(decoder.decode(payloadBytes)) as SessionTokenPayload
 
-    if (!payload.userId || !payload.name || !payload.role || typeof payload.exp !== 'number') {
+    if (!payload.userId || !payload.username || !payload.role || typeof payload.exp !== 'number') {
       return null
     }
 
@@ -87,7 +92,7 @@ export async function verifySessionToken(token: string): Promise<SessionUser | n
 
     return {
       userId: payload.userId,
-      name: payload.name,
+      username: payload.username,
       role: payload.role,
     }
   } catch {

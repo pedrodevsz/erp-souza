@@ -2,16 +2,14 @@ import { z } from 'zod'
 
 import { normalizeTextInput } from '@/lib/text'
 
-const numericPasswordSchema = z
+export const passwordSchema = z
   .string()
-  .trim()
-  .min(1, 'A senha numérica deve ter ao menos 1 dígito.')
-  .max(12, 'A senha numérica deve ter no máximo 12 dígitos.')
-  .regex(/^\d+$/, 'A senha deve conter apenas números.')
+  .min(8, 'A senha deve ter entre 8 e 128 caracteres.')
+  .max(128, 'A senha deve ter entre 8 e 128 caracteres.')
 
 export const authLoginSchema = z.object({
-  name: z.string().trim().min(1, 'Nome do usuário é obrigatório.').transform(normalizeTextInput),
-  password: numericPasswordSchema,
-})
+  username: z.string().trim().min(1, 'Nome de usuário é obrigatório.').transform(normalizeTextInput),
+  password: passwordSchema,
+}).strict()
 
 export type AuthLoginInput = z.infer<typeof authLoginSchema>

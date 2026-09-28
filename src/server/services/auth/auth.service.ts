@@ -1,24 +1,10 @@
 import { connectToDatabase } from '@/server/db/mongodb'
 import { AppError } from '@/server/errors/app-error'
-import { verifyNumericPassword } from '@/server/auth/password'
+import { verifyPassword } from '@/server/auth/password'
 import type { SessionUser } from '@/types/user'
-import {
-  UserModel,
-  type UserDTO,
-  type UserDocumentShape,
-} from '@/server/models/users/users.model'
+import { toPublicUser } from '@/server/models/users/user-public'
+import { UserModel } from '@/server/models/users/users.model'
 import { authLoginSchema } from '@/server/schemas/auth/auth.schema'
-
-function toUserDTO(user: UserDocumentShape): UserDTO {
-  return {
-    id: String(user._id),
-    name: user.name,
-    role: user.role,
-    isActive: user.isActive,
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt.toISOString(),
-  }
-}
 
 async function requireActiveUserFromSession(actor?: SessionUser | null) {
   if (!actor) {
@@ -38,10 +24,10 @@ export const AuthService = {
     await connectToDatabase()
 
     const parsed = authLoginSchema.parse(data)
-    const user = await UserModel.findOne({ isActive: true, name: parsed.name })
+    const user = await UserModel.findOne({ isActive: true, username: parsed.username })
 
-    if (user && (await verifyNumericPassword(parsed.password, user.passwordHash))) {
-      return toUserDTO(user)
+    if (user && (await verifyPassword(parsed.password, user.passwordHash))) {
+      return toPublicUser(user)
     }
 
     throw new AppError('Usuário ou senha inválidos.', 401)
@@ -49,6 +35,6 @@ export const AuthService = {
 
   async me(actor?: SessionUser | null) {
     await connectToDatabase()
-    return toUserDTO(await requireActiveUserFromSession(actor))
+    return toPublicUser(await requireActiveUserFromSession(actor))
   },
 }

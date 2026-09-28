@@ -5,7 +5,7 @@ import type { UserRole } from '@/types/user'
 
 const userSchema = new Schema(
   {
-    name: { type: String, required: true, trim: true, index: true, unique: true, set: normalizeTextInput },
+    username: { type: String, required: true, trim: true, index: true, unique: true, set: normalizeTextInput },
     passwordHash: { type: String, required: true, trim: true },
     role: {
       type: String,
@@ -40,11 +40,11 @@ export type UserDocumentShape = UserModelFields & {
 
 export type UserDTO = {
   id: string
-  name: string
+  username: string
   role: UserRole
   isActive: boolean
-  createdAt: string
-  updatedAt: string
+  createdAt: string | null
+  updatedAt: string | null
 }
 
 export const UserModel: Model<UserDocumentShape> =

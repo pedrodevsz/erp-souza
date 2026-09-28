@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { AppError } from '@/server/errors/app-error'
+import { getCurrentUser } from '@/server/auth/current-user'
 import { AUTH_COOKIE_NAME, getSessionFromCookieValue } from '@/server/auth/session'
 import type { UserDTO } from '@/server/models/users/users.model'
 import { AuthService } from '@/server/services/auth/auth.service'
@@ -34,6 +35,20 @@ export async function requireAdminUser() {
 
   if (currentUser.role !== 'ADMIN') {
     redirect('/dashboard')
+  }
+
+  return currentUser
+}
+
+export async function requireAdminApiUser() {
+  const currentUser = await getCurrentUser()
+
+  if (!currentUser) {
+    throw new AppError('Não autenticado.', 401)
+  }
+
+  if (currentUser.role !== 'ADMIN') {
+    throw new AppError('Acesso restrito a administradores.', 403)
   }
 
   return currentUser

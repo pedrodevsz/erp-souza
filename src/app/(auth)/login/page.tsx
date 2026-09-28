@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Butto
 
 export default function LoginPage() {
   const router = useRouter()
-  const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -17,15 +17,14 @@ export default function LoginPage() {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    const trimmedName = name.trim()
-    const trimmedPassword = password.trim()
-    if (!trimmedName) {
+    const normalizedUsername = username.trim()
+    if (!normalizedUsername) {
       setError('Informe seu nome de usuário.')
       return
     }
 
-    if (!trimmedPassword) {
-      setError('Informe sua senha numérica.')
+    if (!password) {
+      setError('Informe sua senha.')
       return
     }
 
@@ -33,7 +32,7 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      await AuthService.login(trimmedName, trimmedPassword)
+      await AuthService.login(normalizedUsername, password)
       router.replace('/dashboard')
       router.refresh()
     } catch (error) {
@@ -56,10 +55,10 @@ export default function LoginPage() {
 
             <div className="space-y-3">
               <h1 className="max-w-md text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
-                Entrar no sistema com senha numérica
+                Entrar no sistema com sua senha
               </h1>
               <p className="max-w-lg text-base leading-7 text-slate-600">
-                O acesso é liberado apenas para usuários cadastrados pelo administrador. Sem cadastro público e sem senha em texto puro.
+                O acesso é liberado apenas para usuários cadastrados pelo administrador. Sua senha pode conter letras, números e símbolos.
               </p>
             </div>
           </div>
@@ -73,7 +72,7 @@ export default function LoginPage() {
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <LockKeyhole className="h-5 w-5 text-sky-600" />
               <p className="mt-3 text-sm font-medium text-slate-900">Senha única</p>
-              <p className="mt-1 text-sm text-slate-500">Cada usuário usa sua própria senha numérica.</p>
+              <p className="mt-1 text-sm text-slate-500">Cada usuário usa sua própria senha.</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <LogIn className="h-5 w-5 text-sky-600" />
@@ -95,13 +94,13 @@ export default function LoginPage() {
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="space-y-2">
-                  <label htmlFor="name" className="text-sm font-medium text-slate-700">
+                  <label htmlFor="username" className="text-sm font-medium text-slate-700">
                     Usuário
                   </label>
                   <Input
-                    id="name"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
+                    id="username"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
                     placeholder="Digite seu usuário"
                     autoComplete="username"
                   />
@@ -109,15 +108,14 @@ export default function LoginPage() {
 
                 <div className="space-y-2">
                   <label htmlFor="password" className="text-sm font-medium text-slate-700">
-                    Senha numérica
+                    Senha
                   </label>
                   <Input
                     id="password"
                     type="password"
-                    inputMode="numeric"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Digite apenas números"
+                    placeholder="Digite sua senha"
                     autoComplete="current-password"
                   />
                 </div>

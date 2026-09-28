@@ -12,7 +12,7 @@ import type { SessionUser } from "@/types/user";
 import { useRouter } from "next/navigation";
 
 type Props = {
-  currentUser: Pick<SessionUser, 'name' | 'role'>
+  currentUser: Pick<SessionUser, 'username' | 'role'>
 }
 
 export function DesktopMenu({ currentUser }: Props) {
@@ -96,7 +96,7 @@ export function DesktopMenu({ currentUser }: Props) {
         {!collapsed ? (
           <div className="space-y-3">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-              <p className="text-sm font-semibold text-slate-900">{currentUser.name}</p>
+              <p className="text-sm font-semibold text-slate-900">{currentUser.username}</p>
               <p className="text-xs text-slate-500">{currentUser.role === 'ADMIN' ? 'Administrador' : 'Usuário'}</p>
             </div>
 
