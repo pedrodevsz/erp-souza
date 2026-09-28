@@ -1,4 +1,4 @@
-import type { Product } from '@/types/product'
+import type { Product, ProductUpdateInput } from '@/types/product'
 import type { ProductInput } from '@/lib/products'
 
 type ApiSuccessResponse<T> = { success: true; data: T }
@@ -40,7 +40,7 @@ export async function createProduct(data: ProductInput) {
   return request<Product>('/api/products', { method: 'POST', body: JSON.stringify(data) })
 }
 
-export async function updateProduct(id: string, data: Partial<ProductInput>) {
+export async function updateProduct(id: string, data: ProductUpdateInput) {
   return request<Product>(`/api/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }
 

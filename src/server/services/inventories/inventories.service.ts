@@ -17,10 +17,11 @@ import {
   inventoryListQuerySchema,
   inventoryMovementListQuerySchema,
   inventoryUpdateSchema,
+  inventoryMinimumStockSchema,
   type CreateInventoryInput,
 } from '@/server/schemas/inventories/inventories.schema'
 import { buildProductLabel } from '@/lib/products'
-import { calculateAvailableStock, calculateInventoryProfitPercentage } from '@/lib/inventories/inventory'
+import { calculateAvailableStock, calculateInventoryProfitPercentage, DEFAULT_MINIMUM_STOCK, normalizeMinimumStock } from '@/lib/inventories/inventory'
 import { normalizeTextInput } from '@/lib/text'
 
 function escapeRegExp(value: string) {
@@ -87,7 +88,7 @@ export function buildPurchaseInventoryPayload(item: InventorySyncItem, supplier:
     profitPercentage,
     salePrice: item.salePrice ?? item.unitPrice,
     currentStock: quantity,
-    minimumStock: 0,
+    minimumStock: DEFAULT_MINIMUM_STOCK,
     reservedStock: 0,
     availableStock: quantity,
     location: normalizeTextInput('A definir'),
@@ -359,7 +360,7 @@ function toInventoryDTO(item: InventoryDocumentShape): InventoryDTO {
     profitPercentage,
     salePrice: item.salePrice,
     currentStock: item.currentStock,
-    minimumStock: item.minimumStock,
+    minimumStock: normalizeMinimumStock(item.minimumStock),
     reservedStock: item.reservedStock,
     availableStock: item.availableStock,
     location: item.location,
@@ -482,6 +483,7 @@ export const InventoryService = {
       availableStock,
       profitPercentage,
       ...normalized,
+      minimumStock: DEFAULT_MINIMUM_STOCK,
       notes: normalizeProductText(parsed.notes),
     })
 
@@ -503,6 +505,16 @@ export const InventoryService = {
     await connectToDatabase()
     const currentUser = await requireCurrentUser()
     return toInventoryDTO(await findInventoryByIdOrThrow(id, currentUser.id))
+  },
+
+  async updateMinimumStock(id: string, data: unknown) {
+    await connectToDatabase()
+    const currentUser = await requireCurrentUser()
+    const parsed = inventoryMinimumStockSchema.parse(data)
+    const item = await findInventoryByIdOrThrow(id, currentUser.id)
+    item.minimumStock = parsed.minimumStock
+    await item.save()
+    return toInventoryDTO(item)
   },
 
   async update(id: string, data: unknown) {
@@ -527,7 +539,6 @@ export const InventoryService = {
         const nextSalePrice = parsed.salePrice ?? item.salePrice
         const nextProfitPercentage = parsed.profitPercentage ?? calculateInventoryProfitPercentage(nextCostPrice, nextSalePrice)
         const nextCurrentStock = parsed.currentStock ?? item.currentStock
-        const nextMinimumStock = parsed.minimumStock ?? item.minimumStock
         const nextReservedStock = parsed.reservedStock ?? item.reservedStock
         const normalized = await ensureUniqueInventory(
           {
@@ -541,7 +552,6 @@ export const InventoryService = {
             profitPercentage: nextProfitPercentage,
             salePrice: nextSalePrice,
             currentStock: nextCurrentStock,
-            minimumStock: nextMinimumStock,
             reservedStock: nextReservedStock,
             productId: item.productId,
             sku: item.sku,
@@ -600,7 +610,6 @@ export const InventoryService = {
         item.profitPercentage = nextProfitPercentage
         item.salePrice = nextSalePrice
         item.currentStock = nextCurrentStock
-        item.minimumStock = nextMinimumStock
         item.reservedStock = nextReservedStock
         item.availableStock = calculateAvailableStock(nextCurrentStock, nextReservedStock)
         item.notes = parsed.notes !== undefined ? normalizeTextInput(parsed.notes) : item.notes

@@ -1,13 +1,11 @@
 import { ProductViewPage } from '@/components/products/view/product-view-page'
 
 type Props = {
-  params: {
-    id: string
-  }
+  params: Promise<{ id: string }>
 }
 
 export default async function ProductDetailsPage({ params }: Props) {
-  const { id } = params
+  const { id } = await params
 
   return <ProductViewPage id={id} />
 }

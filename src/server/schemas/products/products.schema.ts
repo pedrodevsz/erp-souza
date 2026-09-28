@@ -8,9 +8,11 @@ const productBaseSchema = z.object({
 })
 
 export const productCreateSchema = productBaseSchema.strict()
+export const productUpdateSchema = productBaseSchema.partial().strict()
 export const productListQuerySchema = z.object({
   search: z.string().trim().min(1).optional(),
 })
 
 export type CreateProductInput = z.infer<typeof productCreateSchema>
+export type UpdateProductInput = z.infer<typeof productUpdateSchema>
 export type ProductListQuery = z.infer<typeof productListQuerySchema>

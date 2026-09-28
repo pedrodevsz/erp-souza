@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyStateAction } from '@/components/shared'
 import { PageLoading } from '@/components/shared/page-loading'
 import type { InventoryItem } from '@/types/inventory'
-import { calculateInventoryStatus, formatDate, statusLabel, statusTone } from '@/lib/inventories/inventory'
+import { calculateInventoryStatus, formatDate, normalizeMinimumStock, statusLabel, statusTone } from '@/lib/inventories/inventory'
 
 type Props = {
   items: InventoryItem[]
@@ -71,7 +71,7 @@ export function InventoryTable({ items, loading = false, onView, onEdit, onDelet
                   </TableCell>
                   <TableCell className="px-4 py-3 whitespace-nowrap">{item.sku}</TableCell>
                   <TableCell className="px-4 py-3 whitespace-nowrap">{item.category}</TableCell>
-                  <TableCell className={`px-4 py-3 whitespace-nowrap ${item.currentStock === 0 ? 'text-red-600' : item.currentStock <= item.minimumStock ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  <TableCell className={`px-4 py-3 whitespace-nowrap ${item.currentStock === 0 ? 'text-red-600' : item.currentStock <= normalizeMinimumStock(item.minimumStock) ? 'text-amber-600' : 'text-emerald-600'}`}>
                     {item.currentStock} {item.unit}
                   </TableCell>
                   <TableCell className="px-4 py-3 whitespace-nowrap">{item.reservedStock} {item.unit}</TableCell>

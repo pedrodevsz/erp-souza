@@ -4,6 +4,8 @@ import type { InventoryItem } from '@/types/inventory'
 import type { Purchase } from '@/types/purchases'
 import type { Sale, SalePayment } from '@/types/sale'
 import { roundCurrency } from '@/lib/sales'
+import { normalizeMinimumStock } from '@/lib/inventory'
+import { normalizeBusinessDate } from '@/lib/business-date'
 import type {
   DashboardCustomerPeriod,
   DashboardDeliveryPeriod,
@@ -46,7 +48,7 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
 const numberFormatter = new Intl.NumberFormat('pt-BR')
 
 function parseDate(value: string | Date) {
-  const date = typeof value === 'string' ? new Date(value) : value
+  const date = typeof value === 'string' ? new Date(`${normalizeBusinessDate(value)}T12:00:00`) : value
   return Number.isNaN(date.getTime()) ? null : date
 }
 
@@ -262,7 +264,7 @@ export function aggregateTopCustomers(
 export function aggregateLowStockItems(items: InventoryItem[], location = 'all'): DashboardLowStockRow[] {
   return items
     .filter((item) => (location === 'all' ? true : item.location === location))
-    .filter((item) => item.currentStock === 0 || item.currentStock <= 5 || item.currentStock <= item.minimumStock)
+    .filter((item) => item.currentStock === 0 || item.currentStock <= normalizeMinimumStock(item.minimumStock))
     .sort((left, right) => {
       const leftPriority = left.currentStock === 0 ? 0 : 1
       const rightPriority = right.currentStock === 0 ? 0 : 1
@@ -274,7 +276,7 @@ export function aggregateLowStockItems(items: InventoryItem[], location = 'all')
       id: item.id,
       productName: item.productName,
       currentStock: item.currentStock,
-      minimumStock: item.minimumStock,
+      minimumStock: normalizeMinimumStock(item.minimumStock),
       unit: item.unit,
       location: item.location,
       status: item.currentStock === 0 ? 'Falta' : 'Baixo',
@@ -293,8 +295,8 @@ export function getLowStockLocations(items: InventoryItem[]) {
 }
 
 export function calculateInventoryBreakdown(items: InventoryItem[]): DashboardBreakdownItem[] {
-  const inStock = items.filter((item) => item.currentStock > item.minimumStock && item.reservedStock === 0).length
-  const lowStock = items.filter((item) => item.currentStock > 0 && item.currentStock <= item.minimumStock).length
+  const inStock = items.filter((item) => item.currentStock > normalizeMinimumStock(item.minimumStock) && item.reservedStock === 0).length
+  const lowStock = items.filter((item) => item.currentStock > 0 && item.currentStock <= normalizeMinimumStock(item.minimumStock)).length
   const empty = items.filter((item) => item.currentStock === 0).length
   const others = Math.max(0, items.length - inStock - lowStock - empty)
 
@@ -310,8 +312,8 @@ export function calculateInventoryBreakdown(items: InventoryItem[]): DashboardBr
 }
 
 export function calculateInventorySummary(items: InventoryItem[]) {
-  const inStock = items.filter((item) => item.currentStock > item.minimumStock && item.reservedStock === 0).length
-  const lowStock = items.filter((item) => item.currentStock > 0 && item.currentStock <= item.minimumStock).length
+  const inStock = items.filter((item) => item.currentStock > normalizeMinimumStock(item.minimumStock) && item.reservedStock === 0).length
+  const lowStock = items.filter((item) => item.currentStock > 0 && item.currentStock <= normalizeMinimumStock(item.minimumStock)).length
   const emptyStock = items.filter((item) => item.currentStock === 0).length
   const others = Math.max(0, items.length - inStock - lowStock - emptyStock)
 

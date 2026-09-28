@@ -45,7 +45,7 @@ export type InventoryFilters = {
 
 export type NewInventoryItem = Omit<
   InventoryItem,
-  'id' | 'productId' | 'sku' | 'availableStock' | 'createdAt' | 'updatedAt' | 'lastEntryDate' | 'lastOutputDate' | 'brand'
+  'id' | 'productId' | 'sku' | 'availableStock' | 'createdAt' | 'updatedAt' | 'lastEntryDate' | 'lastOutputDate' | 'brand' | 'minimumStock'
 > & {
   productId?: string
   sku?: string

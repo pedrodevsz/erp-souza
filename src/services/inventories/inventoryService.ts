@@ -56,6 +56,13 @@ export const InventoryService = {
     })
   },
 
+  async updateMinimumStock(id: string, minimumStock: number): Promise<InventoryItem> {
+    return request<InventoryItem>(`/api/inventories/${id}/minimum-stock`, {
+      method: 'PATCH',
+      body: JSON.stringify({ minimumStock }),
+    })
+  },
+
   async update(id: string, data: UpdateInventoryItem): Promise<InventoryItem | null> {
     return request<InventoryItem>(`/api/inventories/${id}`, {
       method: 'PATCH',

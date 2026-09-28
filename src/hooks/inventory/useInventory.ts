@@ -4,6 +4,7 @@ import { useInventoryStore, DEFAULT_FILTERS } from '@/stores/inventories/useInve
 import {
   calculateInventoryStatus,
   calculateItemValue,
+  normalizeMinimumStock,
 } from '@/lib/inventory'
 import type {
   InventoryItem,
@@ -109,7 +110,7 @@ export function useInventory() {
         acc.totalProducts += 1
         acc.totalValue += calculateItemValue(item)
         acc.totalStock += item.currentStock
-        acc.minimumStock += item.minimumStock
+        acc.minimumStock += normalizeMinimumStock(item.minimumStock)
         acc.reservedStock += item.reservedStock
         acc.availableStock += item.availableStock
 

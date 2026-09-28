@@ -4,7 +4,7 @@ import mongoose from 'mongoose'
 
 import { buildPurchaseInventoryPayload } from './inventories.service'
 import { InventoryModel } from '@/server/models/inventories/inventories.model'
-import { inventoryCreateSchema } from '@/server/schemas/inventories/inventories.schema'
+import { inventoryCreateSchema, inventoryMinimumStockSchema, inventoryUpdateSchema } from '@/server/schemas/inventories/inventories.schema'
 
 test('inventoryCreateSchema aceita marca ausente ou vazia', () => {
   assert.equal(
@@ -17,7 +17,6 @@ test('inventoryCreateSchema aceita marca ausente ou vazia', () => {
       profitPercentage: 50,
       salePrice: 75,
       currentStock: 12,
-      minimumStock: 0,
       reservedStock: 0,
       supplier: 'PADEIRO',
       location: 'A definir',
@@ -34,13 +33,19 @@ test('inventoryCreateSchema aceita marca ausente ou vazia', () => {
       profitPercentage: 50,
       salePrice: 75,
       currentStock: 12,
-      minimumStock: 0,
       reservedStock: 0,
       supplier: 'PADEIRO',
       location: 'A definir',
     }).success,
     true
   )
+
+  assert.equal(inventoryCreateSchema.safeParse({ productName: 'Areia', category: 'GERAL', unit: 'M²', costPrice: 50, profitPercentage: 50, salePrice: 75, currentStock: 12, reservedStock: 0, supplier: 'PADEIRO', location: 'A definir', minimumStock: 10 }).success, false)
+})
+
+test('estoque mínimo só pode ser alterado pela operação dedicada', () => {
+  assert.equal(inventoryUpdateSchema.safeParse({ minimumStock: 20 }).success, false)
+  assert.deepEqual(inventoryMinimumStockSchema.parse({ minimumStock: 20 }), { minimumStock: 20 })
 })
 
 test('buildPurchaseInventoryPayload preserva marca informada e normaliza ausência', () => {

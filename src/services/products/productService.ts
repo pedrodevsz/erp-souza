@@ -5,7 +5,7 @@ import {
   updateProduct as apiUpdateProduct,
   ProductApiError,
 } from '@/lib/products-api'
-import type { Product } from '@/types/product'
+import type { Product, ProductUpdateInput } from '@/types/product'
 import type { ProductInput } from '@/lib/products'
 
 export { ProductApiError }
@@ -19,7 +19,7 @@ export const ProductService = {
     return apiCreateProduct(data)
   },
 
-  async update(id: string, data: Partial<ProductInput>): Promise<Product> {
+  async update(id: string, data: ProductUpdateInput): Promise<Product> {
     return apiUpdateProduct(id, data)
   },
 
