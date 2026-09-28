@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { normalizeSalePaymentConditionType } from '@/lib/sales'
 import { normalizeTextInput } from '@/lib/text'
+import { isBusinessDate, normalizeBusinessDate } from '@/lib/business-date'
 
 function normalizeDecimalValue(value: unknown) {
   if (typeof value === 'string') {
@@ -65,9 +66,9 @@ const saleBaseSchema = z.object({
   customerName: z.string().trim().min(1, 'Nome do cliente é obrigatório.').transform(normalizeTextInput),
   sellerId: z.string().trim().min(1, 'Selecione um vendedor.'),
   sellerName: z.string().trim().min(1, 'Nome do vendedor é obrigatório.').transform(normalizeTextInput),
-  saleDate: z.string().trim().min(1, 'Data da venda é obrigatória.'),
+  saleDate: z.string().trim().min(1, 'Data da venda é obrigatória.').transform(normalizeBusinessDate).refine(isBusinessDate, 'Data da venda inválida.'),
   isDelivery: z.boolean(),
-  deliveryDate: z.string().trim().optional(),
+  deliveryDate: z.string().trim().transform(normalizeBusinessDate).optional(),
   paymentMethod: z.preprocess(normalizeTextValue, z.string().trim().transform(normalizeTextInput).optional()),
   initialPayment: z.preprocess(
     normalizeDecimalValue,

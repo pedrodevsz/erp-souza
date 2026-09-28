@@ -17,6 +17,7 @@ import {
   getSaleRemainingAmount,
 } from '@/lib/sales'
 import type { Sale } from '@/types/sale'
+import { formatBusinessDate } from '@/lib/business-date'
 
 type Props = {
   sale: Sale
@@ -42,9 +43,9 @@ export function SaleGeneralCard({ sale }: Props) {
           items={[
             { label: 'Cliente', value: sale.customerName },
             { label: 'Vendedor', value: sale.sellerName },
-            { label: 'Data da Venda', value: sale.saleDate.slice(0, 10) },
+            { label: 'Data da Venda', value: formatBusinessDate(sale.saleDate) },
             { label: 'É para entrega?', value: <Badge variant={getSaleDeliveryFlagVariant(sale.isDelivery)}>{getSaleDeliveryFlagLabel(sale.isDelivery)}</Badge> },
-            { label: 'Previsão de Entrega', value: sale.deliveryDate ? sale.deliveryDate.slice(0, 10) : 'Sem previsão' },
+            { label: 'Previsão de Entrega', value: sale.deliveryDate ? formatBusinessDate(sale.deliveryDate) : 'Sem previsão' },
             {
               label: 'Condição de Pagamento',
               value: <Badge variant={sale.paymentStatus === 'PAID' ? 'success' : sale.paymentStatus === 'PARTIAL' ? 'warning' : 'neutral'}>{getSalePaymentConditionLabel(sale.paymentCondition)}</Badge>,

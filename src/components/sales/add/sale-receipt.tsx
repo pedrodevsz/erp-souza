@@ -1,6 +1,7 @@
 "use client"
 
 import type { Sale } from '@/types/sale'
+import { formatBusinessDate } from '@/lib/business-date'
 import { createSaleReference, formatCurrency, getSalePaymentConditionLabel, getSalePaymentMethodLabel, SALE_PAYMENT_STATUS_LABELS } from '@/lib/sales'
 
 const SALE_RECEIPT_COMPANY_NAME = 'SOUZA CONSTRUÇÕES'
@@ -21,6 +22,10 @@ function formatDateTime(value: string) {
 }
 
 function formatDate(value: string) {
+  return formatBusinessDate(value)
+}
+
+function formatTimestampDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value || '-'
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(date)
@@ -173,7 +178,7 @@ export function SaleReceipt({ sale }: { sale: Sale }) {
                 <div key={payment.id ?? `${sale.id}-${index}`} className="flex items-start justify-between gap-3 text-[11px]">
                   <div className="space-y-0.5">
                     <p className="font-bold">{payment.paymentMethod || 'Forma não informada'}</p>
-                    <p className="text-slate-600">{payment.notes || formatDate(payment.date)}</p>
+                    <p className="text-slate-600">{payment.notes || formatTimestampDate(payment.date)}</p>
                   </div>
                   <div className="text-right">
                     <p>{formatCurrency(payment.amount)}</p>
@@ -235,7 +240,7 @@ function buildInstallmentsHtml(sale: Sale) {
               <div class="installment">
                 <div>
                   <div class="installment-title">${escapeHtml(payment.paymentMethod || 'Forma não informada')}</div>
-                  <div class="installment-meta">${escapeHtml(payment.notes || formatDate(payment.date))}</div>
+                  <div class="installment-meta">${escapeHtml(payment.notes || formatTimestampDate(payment.date))}</div>
                 </div>
                 <div class="installment-value">
                   <div>${escapeHtml(formatCurrency(payment.amount))}</div>

@@ -9,7 +9,7 @@ import { SaleNotesCard } from './sale-notes-card'
 import { SaleFormActions } from './sale-form-actions'
 import { SaleCustomerDialog } from './sale-customer-dialog'
 import { SaleSideSheets } from './sale-side-sheets'
-import { createEmptySaleItem, type SaleItemDraft, type SaleProductOption } from './sale-form.types'
+import { getEditableSaleStock, createEmptySaleItem, type SaleItemDraft, type SaleProductOption } from './sale-form.types'
 import { useSellerEmployees } from '@/hooks/employees/useSellerEmployees'
 import type { Customer } from '@/types/customer'
 import type { NewSale, Sale } from '@/types/sale'
@@ -28,6 +28,7 @@ import {
 import { useCustomerStore } from '@/stores/customers/useCustomerStore'
 import { useInventoryStore } from '@/stores/inventories/useInventoryStore'
 import { normalizeTextInput } from '@/lib/text'
+import { getTodayBusinessDate } from '@/lib/business-date'
 
 type Props = {
   initialValues?: Partial<Sale>
@@ -49,9 +50,8 @@ function buildItems(initialValues?: Partial<Sale>): SaleItemDraft[] {
     : []
 }
 
-function toISODate(value: string) {
-  if (!value) return new Date().toISOString()
-  return new Date(`${value}T12:00:00`).toISOString()
+function toBusinessDate(value: string) {
+  return value || getTodayBusinessDate()
 }
 
 export function SaleForm({ initialValues, submitLabel = 'Salvar Venda', onSubmit, onCancel }: Props) {
@@ -74,7 +74,7 @@ export function SaleForm({ initialValues, submitLabel = 'Salvar Venda', onSubmit
   )
   const [customerId, setCustomerId] = useState(initialValues?.customerId ?? '')
   const [customerQuery, setCustomerQuery] = useState(initialValues?.customerName ?? '')
-  const [saleDate, setSaleDate] = useState(initialValues?.saleDate ? initialValues.saleDate.slice(0, 10) : new Date().toISOString().slice(0, 10))
+  const [saleDate, setSaleDate] = useState(initialValues?.saleDate ? initialValues.saleDate.slice(0, 10) : getTodayBusinessDate())
   const [sellerId, setSellerId] = useState(initialValues?.sellerId ?? '')
   const [paymentConditionType, setPaymentConditionType] = useState(initialValues?.paymentCondition?.type ?? '')
   const [paymentMethod, setPaymentMethod] = useState(initialValues?.paymentMethod ?? '')
@@ -113,6 +113,7 @@ export function SaleForm({ initialValues, submitLabel = 'Salvar Venda', onSubmit
       }))
   }, [inventoryItems, items])
 
+  const editableItems = useMemo(() => items.map((item) => ({ ...item, availableStock: getEditableSaleStock(item, inventoryItems, initialValues?.items ?? [], isEditing) })), [initialValues?.items, inventoryItems, isEditing, items])
   const subtotal = useMemo(() => calculateSaleSubtotal(items), [items])
   const total = useMemo(() => calculateSaleTotal(subtotal, discount, shipping, otherCosts), [discount, otherCosts, shipping, subtotal])
   const effectiveInitialPayment = isImmediateSalePaymentCondition(paymentConditionType) ? total : initialPayment
@@ -142,7 +143,7 @@ export function SaleForm({ initialValues, submitLabel = 'Salvar Venda', onSubmit
 
       if (existingIndex >= 0) {
         const existing = current[existingIndex]
-        if (existing.quantity >= normalizedProduct.availableStock) {
+        if (existing.quantity >= getEditableSaleStock(existing, inventoryItems, initialValues?.items ?? [], isEditing)) {
           toast.push({
             title: 'Estoque insuficiente',
             description: `Não há estoque suficiente de ${normalizedProduct.productName}.`,
@@ -180,7 +181,7 @@ export function SaleForm({ initialValues, submitLabel = 'Salvar Venda', onSubmit
 
     const normalizedQuantity = roundSaleQuantity(quantity)
 
-    if (normalizedQuantity > current.availableStock) {
+    if (normalizedQuantity > getEditableSaleStock(current, inventoryItems, initialValues?.items ?? [], isEditing)) {
       toast.push({
         title: 'Estoque insuficiente',
         description: `Quantidade acima do estoque disponível para ${current.productName}.`,
@@ -266,7 +267,7 @@ export function SaleForm({ initialValues, submitLabel = 'Salvar Venda', onSubmit
       return
     }
 
-    if (items.some((item) => item.quantity > item.availableStock)) {
+    if (items.some((item) => item.quantity > getEditableSaleStock(item, inventoryItems, initialValues?.items ?? [], isEditing))) {
       toast.push({ title: 'Estoque insuficiente', description: 'Revise a quantidade dos itens selecionados.', type: 'error' })
       return
     }
@@ -322,9 +323,9 @@ export function SaleForm({ initialValues, submitLabel = 'Salvar Venda', onSubmit
       customerName: normalizeTextInput(customer.name),
       sellerId: seller.id,
       sellerName: normalizeTextInput(seller.name),
-      saleDate: toISODate(saleDate),
+      saleDate: toBusinessDate(saleDate),
       isDelivery,
-      deliveryDate: isDelivery && deliveryDate ? toISODate(deliveryDate) : undefined,
+      deliveryDate: isDelivery && deliveryDate ? toBusinessDate(deliveryDate) : undefined,
       paymentMethod: isImmediateSalePaymentCondition(paymentCondition.type) ? normalizeTextInput(paymentMethod) : '',
       paymentCondition,
       initialPayment: isEditing ? undefined : isImmediateSalePaymentCondition(paymentCondition.type) ? total : roundCurrency(initialPayment),
@@ -340,7 +341,7 @@ export function SaleForm({ initialValues, submitLabel = 'Salvar Venda', onSubmit
         sku: normalizeTextInput(item.sku?.trim() || item.productId?.trim() || ''),
         unit: normalizeTextInput(item.unit),
         quantity: item.quantity,
-        availableStock: Number.isFinite(item.availableStock) ? item.availableStock : 0,
+        availableStock: getEditableSaleStock(item, inventoryItems, initialValues?.items ?? [], isEditing),
         unitPrice: item.unitPrice,
         discount: roundCurrency(item.discount),
       })),
@@ -445,7 +446,7 @@ export function SaleForm({ initialValues, submitLabel = 'Salvar Venda', onSubmit
             search={search}
             onSearchChange={setSearch}
             availableProducts={filteredProducts}
-            items={items}
+            items={editableItems}
             onAddProduct={handleAddProduct}
             onQuantityChange={handleQuantityChange}
             onDiscountChange={handleDiscountChange}

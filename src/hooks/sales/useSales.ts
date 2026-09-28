@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useSaleStore } from '@/stores/useSaleStore'
 import { SALE_DELIVERY_STATUS_LABELS, createSaleReference } from '@/lib/sales'
+import { normalizeBusinessDate } from '@/lib/business-date'
 import type { Sale } from '@/types/sale'
 
 type SalesSummary = {
@@ -78,7 +79,7 @@ export function useSales() {
         acc.totalSales += 1
         acc.totalAmount += sale.total
 
-        const saleDate = new Date(sale.saleDate)
+        const saleDate = new Date(`${normalizeBusinessDate(sale.saleDate)}T12:00:00`)
         if (saleDate.getMonth() === currentMonth && saleDate.getFullYear() === currentYear) {
           acc.monthlySales += 1
         }

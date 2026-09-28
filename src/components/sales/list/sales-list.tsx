@@ -13,6 +13,7 @@ import { useSales } from '@/hooks/sales/useSales'
 import { PageLoading } from '@/components/shared/page-loading'
 import { EmptyStateAction } from '@/components/shared'
 import { createSaleReference, formatCurrency, getSalePaymentMethodLabel, SALE_DELIVERY_STATUS_VARIANTS, SALE_DELIVERY_STATUS_LABELS, SALE_PAYMENT_STATUS_LABELS, SALE_PAYMENT_STATUS_VARIANTS } from '@/lib/sales'
+import { formatBusinessDate } from '@/lib/business-date'
 import { saleMessages, getFeedbackErrorMessage } from '@/lib/messages/feedback'
 import { useSaleStore } from '@/stores/useSaleStore'
 
@@ -144,7 +145,7 @@ export function SalesList() {
               <tr key={sale.id}>
                 <td className="px-4 py-2 align-middle font-medium whitespace-nowrap">{createSaleReference(sale.id)}</td>
                 <td className="px-4 py-2 align-middle whitespace-nowrap">{sale.customerName}</td>
-                <td className="px-4 py-2 align-middle whitespace-nowrap">{sale.saleDate.slice(0, 10)}</td>
+                <td className="px-4 py-2 align-middle whitespace-nowrap">{formatBusinessDate(sale.saleDate)}</td>
                 <td className="px-4 py-2 align-middle whitespace-nowrap">{formatCurrency(sale.total)}</td>
                 <td className="px-4 py-2 align-middle whitespace-nowrap">
                   <Badge variant={SALE_DELIVERY_STATUS_VARIANTS[sale.deliveryStatus]}>{SALE_DELIVERY_STATUS_LABELS[sale.deliveryStatus]}</Badge>

@@ -55,10 +55,10 @@ export type SaleInput = {
 export type SaleHistoryEntry = {
   id: string
   saleId: string
-  action: 'created' | 'updated' | 'delivered' | 'cancelled'
+  action: 'created' | 'updated' | 'delivered' | 'cancelled' | 'payment_added'
   description: string
   user: string
-  date: string
+  date: string | null
 }
 
 export type Sale = SaleInput & {
