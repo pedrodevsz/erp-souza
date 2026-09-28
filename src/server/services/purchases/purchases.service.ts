@@ -17,6 +17,7 @@ import { calculateSaleTotal, roundCurrency } from '@/lib/sales'
 import { buildProductLabel, normalizeProductInput } from '@/lib/products'
 import { calculatePurchaseProfitPercentage, calculatePurchaseSalePrice, normalizePurchasePaymentCondition } from '@/lib/purchases'
 import { normalizeTextInput } from '@/lib/text'
+import { getTodayBusinessDate } from '@/lib/business-date'
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -285,7 +286,7 @@ export const PurchaseService = {
         const created = new PurchaseModel({
           userId: currentUser.id,
           supplier: normalizeTextInput(parsed.supplier),
-          purchaseDate: parsed.purchaseDate,
+          purchaseDate: getTodayBusinessDate(),
           expectedDelivery: normalizeOptionalText(parsed.expectedDelivery),
           paymentCondition: normalizePurchasePaymentCondition(parsed.paymentCondition),
           paymentMethod: normalizeOptionalText(parsed.paymentMethod),
@@ -327,7 +328,6 @@ export const PurchaseService = {
         const previousItems = await normalizeItems(purchase.items as unknown as UpdatePurchaseInput['items'], currentUser.id, session)
 
         if (parsed.supplier !== undefined) purchase.supplier = normalizeTextInput(parsed.supplier)
-        if (parsed.purchaseDate !== undefined) purchase.purchaseDate = parsed.purchaseDate
         if (parsed.expectedDelivery !== undefined) purchase.expectedDelivery = normalizeOptionalText(parsed.expectedDelivery)
         if (parsed.paymentCondition !== undefined) {
           purchase.paymentCondition = normalizePurchasePaymentCondition(parsed.paymentCondition)

@@ -22,7 +22,6 @@ function buildBasePurchaseItem(overrides: Record<string, unknown> = {}) {
 test('purchaseCreateSchema aceita item com brand vazio ou ausente', () => {
   const withEmptyBrand = purchaseCreateSchema.safeParse({
     supplier: 'PADEIRO',
-    purchaseDate: '2026-09-04T00:00:00.000Z',
     paymentCondition: [],
     discounts: 0,
     freight: 0,
@@ -32,7 +31,6 @@ test('purchaseCreateSchema aceita item com brand vazio ou ausente', () => {
 
   const withoutBrand = purchaseCreateSchema.safeParse({
     supplier: 'PADEIRO',
-    purchaseDate: '2026-09-04T00:00:00.000Z',
     paymentCondition: [],
     discounts: 0,
     freight: 0,
@@ -42,4 +40,16 @@ test('purchaseCreateSchema aceita item com brand vazio ou ausente', () => {
 
   assert.equal(withEmptyBrand.success, true)
   assert.equal(withoutBrand.success, true)
+})
+
+
+test('purchaseCreateSchema não aceita data de compra enviada pelo cliente', () => {
+  const result = purchaseCreateSchema.safeParse({
+    supplier: 'PADEIRO',
+    purchaseDate: '2099-01-01',
+    paymentCondition: [],
+    items: [buildBasePurchaseItem()],
+  })
+
+  assert.equal(result.success, false)
 })

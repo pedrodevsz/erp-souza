@@ -34,6 +34,7 @@ export type PurchaseImportItem = {
 export type PurchaseImportDraft = Omit<NewPurchase, 'items'> & {
   supplierId: string | null
   supplierDocument: string | null
+  purchaseDate: string
   items: PurchaseImportItem[]
 }
 

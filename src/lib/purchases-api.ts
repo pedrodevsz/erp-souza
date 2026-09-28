@@ -17,7 +17,6 @@ export type PurchaseItemInput = {
 
 export type PurchaseInput = {
   supplier: string
-  purchaseDate: string
   expectedDelivery?: string | null
   paymentCondition: PurchasePaymentCondition
   paymentMethod?: string | null

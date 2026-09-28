@@ -8,8 +8,6 @@ type Props = {
   onSupplierQueryChange: (value: string) => void
   onSupplierSelect: (value: string) => void
   onOpenNewSupplier: () => void
-  purchaseDate: string
-  onPurchaseDateChange: (value: string) => void
   invoiceNumber: string
   onInvoiceNumberChange: (value: string) => void
   suppliers: string[]
@@ -21,8 +19,6 @@ export function PurchaseInformationCard({
   onSupplierQueryChange,
   onSupplierSelect,
   onOpenNewSupplier,
-  purchaseDate,
-  onPurchaseDateChange,
   invoiceNumber,
   onInvoiceNumberChange,
   suppliers,
@@ -43,11 +39,6 @@ export function PurchaseInformationCard({
             onSupplierSelect={onSupplierSelect}
             onOpenNewSupplier={onOpenNewSupplier}
           />
-        </div>
-
-        <div>
-          <Label>Data da Compra *</Label>
-          <Input type="date" value={purchaseDate} onChange={(e) => onPurchaseDateChange(e.target.value)} />
         </div>
 
         <div className="md:col-span-3">

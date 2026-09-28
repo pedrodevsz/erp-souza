@@ -39,7 +39,7 @@ export type PurchaseItemInput = Omit<PurchaseItem, 'id' | 'subtotal' | 'productI
     productId?: string
 }
 
-export type NewPurchase = Omit<Purchase, 'id' | 'createdAt' | 'updatedAt' | 'subtotal' | 'total' | 'items'> & {
+export type NewPurchase = Omit<Purchase, 'id' | 'purchaseDate' | 'createdAt' | 'updatedAt' | 'subtotal' | 'total' | 'items'> & {
     items: PurchaseItemInput[]
 }
 
