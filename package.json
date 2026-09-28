@@ -6,11 +6,13 @@
     "dev": "next dev --webpack --hostname 127.0.0.1 --port 3001",
     "build": "next build",
     "start": "next start",
-    "test": "node --import tsx --test src/lib/purchase-invoice.test.ts src/lib/dashboard.test.ts src/server/schemas/purchases/purchase-import.schema.test.ts src/server/services/purchases/import-invoice.service.test.ts src/server/services/products/products.service.test.ts src/server/services/purchases/purchases.service.test.ts src/server/services/inventories/inventories.service.test.ts",
+    "test": "node --import tsx --test src/lib/purchase-invoice.test.ts src/lib/purchase-import.test.ts src/lib/dashboard.test.ts src/server/schemas/purchases/purchase-import.schema.test.ts src/server/services/purchases/import-invoice.service.test.ts src/server/services/products/products.service.test.ts src/server/services/purchases/purchases.service.test.ts src/server/services/inventories/inventories.service.test.ts src/server/schemas/auth/auth.schema.test.ts src/server/auth/password.test.ts src/server/auth/session.test.ts src/server/schemas/users/users.schema.test.ts src/server/models/users/user-public.test.ts src/server/models/users/user-errors.test.ts src/services/deliveries/deliveryService.test.ts src/lib/deliveries.test.ts src/lib/sales.test.ts src/lib/business-date.test.ts src/components/sales/add/sale-form.types.test.ts",
     "lint": "eslint",
     "migrate:uppercase": "node scripts/normalize-uppercase.mjs",
     "migrate:legacy-user-data": "node scripts/migrate-legacy-user-data.mjs",
-    "fix:customer-indexes": "node --import tsx scripts/fix-customer-indexes.ts"
+    "fix:customer-indexes": "node --import tsx scripts/fix-customer-indexes.ts",
+    "audit:sale-dates": "node --import tsx scripts/audit-sale-dates.ts",
+    "migrate:sale-dates": "node --import tsx scripts/migrate-legacy-sale-dates.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
