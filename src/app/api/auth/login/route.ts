@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const user = await AuthService.login(body)
     const token = await createSessionToken({
       userId: user.id,
-      name: user.name,
+      username: user.username,
       role: user.role,
     })
 

@@ -8,7 +8,7 @@ import { MobileMenuDrawer } from "./mobile-menu-drawer";
 import type { SessionUser } from "@/types/user";
 
 type Props = {
-  currentUser: Pick<SessionUser, "name" | "role">;
+  currentUser: Pick<SessionUser, "username" | "role">;
   children: React.ReactNode;
 };
 

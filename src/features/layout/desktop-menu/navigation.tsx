@@ -51,6 +51,12 @@ export const navigationItems = [
         icon: Settings,
         adminOnly: true,
     },
+    {
+        label: "Usuários",
+        href: "/settings/users",
+        icon: Users,
+        adminOnly: true,
+    },
 ];
 
 export function getVisibleNavigationItems(role: string) {

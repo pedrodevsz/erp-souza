@@ -14,7 +14,7 @@ import { getVisibleNavigationItems } from "./desktop-menu/navigation";
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  currentUser: Pick<SessionUser, "name" | "role">;
+  currentUser: Pick<SessionUser, "username" | "role">;
 };
 
 function roleLabel(role: SessionUser["role"]) {
@@ -50,7 +50,7 @@ export function MobileMenuDrawer({ open, onOpenChange, currentUser }: Props) {
             </div>
 
             <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="truncate text-sm font-semibold text-slate-900">{currentUser.name}</p>
+              <p className="truncate text-sm font-semibold text-slate-900">{currentUser.username}</p>
               <p className="truncate text-xs text-slate-500">{roleLabel(currentUser.role)}</p>
             </div>
           </div>

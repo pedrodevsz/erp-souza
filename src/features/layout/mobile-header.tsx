@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { SessionUser } from "@/types/user";
 
 type Props = {
-  currentUser: Pick<SessionUser, "name" | "role">;
+  currentUser: Pick<SessionUser, "username" | "role">;
   onOpenMenu: () => void;
 };
 
@@ -36,7 +36,7 @@ export function MobileHeader({ currentUser, onOpenMenu }: Props) {
 
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-900">ConstróiFácil</p>
-            <p className="truncate text-[11px] text-slate-500">Olá, {currentUser.name}</p>
+            <p className="truncate text-[11px] text-slate-500">Olá, {currentUser.username}</p>
           </div>
         </div>
 
