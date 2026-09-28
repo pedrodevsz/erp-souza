@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { formatSaleHistoryDate } from '@/lib/sales'
 import type { SaleHistoryEntry } from '@/types/sale'
 
 type Props = {
@@ -31,12 +32,12 @@ export function SaleHistoryCard({ history }: Props) {
               <div key={entry.id} className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-2">
-                    <Badge variant={entry.action === 'delivered' ? 'success' : entry.action === 'cancelled' ? 'danger' : 'neutral'}>
-                      {actionLabel[entry.action]}
+                    <Badge variant={entry.action === "delivered" ? "success" : entry.action === "cancelled" ? "danger" : "neutral"}>
+                      {actionLabel[entry.action] ?? "Evento"}
                     </Badge>
                     <span className="text-sm font-medium text-slate-900">{entry.description}</span>
                   </div>
-                  <span className="text-xs text-slate-500">{entry.date.slice(0, 19).replace('T', ' ')}</span>
+                  <span className="text-xs text-slate-500">{formatSaleHistoryDate(entry.date)}</span>
                 </div>
                 <div className="mt-2 text-xs text-slate-500">Responsável: {entry.user}</div>
               </div>

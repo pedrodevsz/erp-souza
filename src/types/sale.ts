@@ -91,5 +91,5 @@ export interface SaleHistoryEntry {
   action: SaleHistoryAction
   description: string
   user: string
-  date: string
+  date: string | null
 }

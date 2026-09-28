@@ -333,8 +333,15 @@ function toSaleDTO(sale: SaleDocumentShape) {
   }
 }
 
+function normalizeHistoryDate(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString()
+  if (typeof value !== 'string' || !value.trim()) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
+}
+
 function toHistoryDTO(sale: SaleDocumentShape) {
-  return sale.history.map((entry) => ({ ...entry }))
+  return sale.history.map((entry) => ({ ...entry, date: normalizeHistoryDate(entry.date) }))
 }
 
 function normalizeSaleItems(items: UpdateSaleInput['items'] | undefined) {

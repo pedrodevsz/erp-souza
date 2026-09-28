@@ -82,7 +82,7 @@ function buildHistory(sale: Sale): SaleHistoryEntry[] {
     })
   }
 
-  return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  return entries.sort((a, b) => (b.date ? new Date(b.date).getTime() : 0) - (a.date ? new Date(a.date).getTime() : 0))
 }
 
 function buildSale(index: number): Sale {

@@ -391,3 +391,10 @@ export function normalizeSaleDeliveryFlag(
 export function saleStatusFromString(value: string): SaleStatus {
   return normalizeSaleDeliveryStatus(value)
 }
+
+export function formatSaleHistoryDate(value: string | Date | null | undefined) {
+  if (!value) return "Data não disponível"
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return "Data não disponível"
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date)
+}

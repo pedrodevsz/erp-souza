@@ -12,6 +12,22 @@ export type SalePaymentConditionDraft = {
   initialPayment: number
 }
 
+export function getEditableSaleStock(
+  item: Pick<SaleItem, 'productId' | 'availableStock'>,
+  inventoryItems: InventoryItem[],
+  originalItems: Array<Pick<SaleItem, 'productId' | 'quantity'>> = [],
+  isEditing = false,
+) {
+  const inventory = inventoryItems.find((entry) => entry.productId === item.productId || entry.id === item.productId)
+  if (!inventory) return Math.max(0, item.availableStock)
+
+  const originalQuantity = isEditing
+    ? originalItems.find((entry) => entry.productId === item.productId)?.quantity ?? 0
+    : 0
+
+  return Math.max(0, inventory.availableStock + originalQuantity)
+}
+
 export function createEmptySaleItem(product?: SaleProductOption): SaleItemDraft {
   const productId = product?.productId ?? product?.id ?? ''
   const sku = product?.sku ?? productId

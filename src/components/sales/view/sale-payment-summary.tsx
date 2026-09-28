@@ -20,6 +20,7 @@ import {
   getSaleRemainingAmount,
 } from '@/lib/sales'
 import type { Sale } from '@/types/sale'
+import { formatBusinessDate } from '@/lib/business-date'
 import type { SalePaymentPayload } from './register-payment-form'
 
 type Props = {
@@ -72,7 +73,7 @@ export function SalePaymentSummary({ sale, onAddPayment }: Props) {
               label: 'Status da entrega',
               value: <Badge variant={SALE_DELIVERY_STATUS_VARIANTS[sale.deliveryStatus]}>{SALE_DELIVERY_STATUS_LABELS[sale.deliveryStatus]}</Badge>,
             },
-            { label: 'Previsão de Entrega', value: sale.deliveryDate ? sale.deliveryDate.slice(0, 10) : 'Sem previsão' },
+            { label: 'Previsão de Entrega', value: sale.deliveryDate ? formatBusinessDate(sale.deliveryDate) : 'Sem previsão' },
           ]}
         />
 
