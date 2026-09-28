@@ -74,12 +74,6 @@ export function InventoryStockCard() {
         </div>
 
         <div>
-          <Label>Estoque Mínimo *</Label>
-          <Input type="number" step="1" {...register('minimumStock')} />
-          {errors.minimumStock && <p className="mt-1 text-sm text-red-600">{errors.minimumStock.message}</p>}
-        </div>
-
-        <div>
           <Label>Reservado *</Label>
           <Input type="number" step="1" {...register('reservedStock')} />
           {errors.reservedStock && <p className="mt-1 text-sm text-red-600">{errors.reservedStock.message}</p>}

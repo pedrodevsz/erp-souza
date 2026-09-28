@@ -13,7 +13,6 @@ const inventoryFieldsSchema = z.object({
   profitPercentage: z.coerce.number().min(0, 'Porcentagem de lucro é obrigatória.'),
   salePrice: z.coerce.number().min(0, 'Preço de venda é obrigatório.'),
   currentStock: z.coerce.number().int().min(0, 'Quantidade atual é obrigatória.'),
-  minimumStock: z.coerce.number().int().min(0, 'Estoque mínimo é obrigatório.'),
   reservedStock: z.coerce.number().int().min(0, 'Estoque reservado é obrigatório.'),
   location: z.string().trim().min(2, 'Localização é obrigatória.').transform(normalizeTextInput),
   supplier: z.string().trim().min(2, 'Fornecedor é obrigatório.').transform(normalizeTextInput),
@@ -49,6 +48,10 @@ export const inventoryUpdateSchema = inventoryFieldsSchema
     }
   )
 
+export const inventoryMinimumStockSchema = z.object({
+  minimumStock: z.coerce.number().int().min(0, 'Estoque mínimo deve ser um inteiro maior ou igual a zero.')
+}).strict()
+
 export const inventoryListQuerySchema = z.object({
   search: z.string().trim().min(1).optional(),
 })
@@ -59,5 +62,6 @@ export const inventoryMovementListQuerySchema = z.object({
 
 export type CreateInventoryInput = z.infer<typeof inventoryCreateSchema>
 export type UpdateInventoryInput = z.infer<typeof inventoryUpdateSchema>
+export type InventoryMinimumStockInput = z.infer<typeof inventoryMinimumStockSchema>
 export type InventoryListQuery = z.infer<typeof inventoryListQuerySchema>
 export type InventoryMovementListQuery = z.infer<typeof inventoryMovementListQuerySchema>

@@ -9,6 +9,7 @@ import {
   productCreateSchema,
   productListQuerySchema,
   type CreateProductInput,
+  productUpdateSchema,
 } from '@/server/schemas/products/products.schema'
 import { buildProductLabel, normalizeProductInput } from '@/lib/products'
 
@@ -128,7 +129,7 @@ export const ProductService = {
 
       await session.withTransaction(async () => {
         const product = await findProductByIdOrThrow(id, currentUser.id, session)
-        const parsed = productCreateSchema.partial().strict().parse(data)
+        const parsed = productUpdateSchema.parse(data)
 
         const nextName = parsed.name ?? product.name
         const nextUnit = parsed.unit ?? product.unit
@@ -173,6 +174,7 @@ export const ProductService = {
           inventory.product = buildProductLabel(normalized.name, normalized.unit, normalized.brand)
           inventory.productId = String(product._id)
         }
+
 
         product.name = normalized.name
         product.unit = normalized.unit

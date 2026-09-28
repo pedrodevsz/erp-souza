@@ -4,13 +4,20 @@ import { buildProductLabel } from '@/lib/products'
 import { roundCurrency } from '@/lib/sales'
 import { normalizeTextInput } from '@/lib/text'
 
+export const DEFAULT_MINIMUM_STOCK = 5
+
+export function normalizeMinimumStock(value: unknown) {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_MINIMUM_STOCK
+}
+
 export function calculateAvailableStock(currentStock: number, reservedStock: number) {
   return currentStock - reservedStock
 }
 
 export function calculateInventoryStatus(item: Pick<InventoryItem, 'currentStock' | 'minimumStock'>): InventoryStatus {
   if (item.currentStock === 0) return 'SEM_ESTOQUE'
-  if (item.currentStock <= item.minimumStock) return 'ESTOQUE_BAIXO'
+  if (item.currentStock <= normalizeMinimumStock(item.minimumStock)) return 'ESTOQUE_BAIXO'
   return 'EM_ESTOQUE'
 }
 
@@ -100,7 +107,6 @@ export function buildInventoryFormValues(item?: Partial<InventoryFormValues> | I
       profitPercentage: 0,
       salePrice: 0,
       currentStock: 0,
-      minimumStock: 0,
       reservedStock: 0,
       supplier: '',
       location: '',
@@ -118,7 +124,6 @@ export function buildInventoryFormValues(item?: Partial<InventoryFormValues> | I
     profitPercentage: item.profitPercentage ?? calculateInventoryProfitPercentage(item.costPrice ?? 0, item.salePrice ?? 0),
     salePrice: item.salePrice ?? 0,
     currentStock: item.currentStock ?? 0,
-    minimumStock: item.minimumStock ?? 0,
     reservedStock: item.reservedStock ?? 0,
     supplier: item.supplier ?? '',
     location: item.location ?? '',
@@ -137,7 +142,6 @@ export function buildInventoryPayload(values: InventoryFormValues): NewInventory
     profitPercentage: values.profitPercentage,
     salePrice: values.salePrice,
     currentStock: values.currentStock,
-    minimumStock: values.minimumStock,
     reservedStock: values.reservedStock,
     location: normalizeTextInput(values.location),
     supplier: normalizeTextInput(values.supplier),

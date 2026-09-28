@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { BookmarkPlus, Package, Tag, Truck, ArrowLeft, Sparkles } from 'lucide-react'
+import { BookmarkPlus, Package, Tag, Truck, ArrowLeft, Sparkles, PencilLine } from 'lucide-react'
 
 import { ProductReservationDialog } from '../list/product-reservation-dialog'
-import { Button, Badge } from '@/components/ui'
+import { Button, Badge, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input } from '@/components/ui'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageLoading } from '@/components/shared/page-loading'
 import { EmptyStateAction } from '@/components/shared'
@@ -13,9 +13,10 @@ import { PageHeader } from '@/components/page-header'
 import { ProductService } from '@/services/products/productService'
 import { InventoryService } from '@/services/inventories/inventoryService'
 import { buildProductLabel } from '@/lib/products'
-import { calculateInventoryStatus, formatCurrency, statusLabel, statusTone } from '@/lib/inventories/inventory'
+import { calculateInventoryStatus, formatCurrency, normalizeMinimumStock, statusLabel, statusTone } from '@/lib/inventories/inventory'
 import type { InventoryItem } from '@/types/inventory'
 import type { Product } from '@/types/product'
+import { useToast } from '@/components/ui/toast-provider'
 
 type Props = {
   id: string
@@ -34,10 +35,14 @@ function formatStockStatus(item?: InventoryItem | null) {
 
 export function ProductViewPage({ id }: Props) {
   const router = useRouter()
+  const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [product, setProduct] = useState<Product | null>(null)
   const [inventoryItem, setInventoryItem] = useState<InventoryItem | null>(null)
   const [reservationOpen, setReservationOpen] = useState(false)
+  const [minimumStockOpen, setMinimumStockOpen] = useState(false)
+  const [minimumStockValue, setMinimumStockValue] = useState('')
+  const [savingMinimumStock, setSavingMinimumStock] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -67,6 +72,33 @@ export function ProductViewPage({ id }: Props) {
       active = false
     }
   }, [id])
+
+  const openMinimumStockEditor = () => {
+    if (!inventoryItem) return
+    setMinimumStockValue(String(normalizeMinimumStock(inventoryItem.minimumStock)))
+    setMinimumStockOpen(true)
+  }
+
+  const saveMinimumStock = async () => {
+    if (!inventoryItem) return
+    const nextMinimumStock = Number(minimumStockValue)
+    if (!Number.isInteger(nextMinimumStock) || nextMinimumStock < 0) {
+      toast.push({ title: 'Erro', description: 'Informe um estoque mínimo inteiro maior ou igual a zero.', type: 'error' })
+      return
+    }
+
+    setSavingMinimumStock(true)
+    try {
+      const updated = await InventoryService.updateMinimumStock(inventoryItem.id, nextMinimumStock)
+      setInventoryItem(updated)
+      setMinimumStockOpen(false)
+      toast.push({ title: 'Sucesso', description: 'Estoque mínimo atualizado.', type: 'success' })
+    } catch (error) {
+      toast.push({ title: 'Erro', description: error instanceof Error ? error.message : 'Não foi possível atualizar o estoque mínimo.', type: 'error' })
+    } finally {
+      setSavingMinimumStock(false)
+    }
+  }
 
   const productLabel = useMemo(() => {
     if (!product) return 'Produto'
@@ -98,6 +130,10 @@ export function ProductViewPage({ id }: Props) {
         <Button variant="outline" onClick={() => router.push('/dashboard/products')} className="w-full sm:w-auto">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Voltar
+        </Button>
+        <Button variant="outline" onClick={openMinimumStockEditor} disabled={!inventoryItem} className="w-full sm:w-auto">
+          <PencilLine className="mr-2 h-4 w-4" />
+          Editar estoque mínimo
         </Button>
         <Button onClick={() => setReservationOpen(true)} className="w-full sm:w-auto">
           <BookmarkPlus className="mr-2 h-4 w-4" />
@@ -154,7 +190,7 @@ export function ProductViewPage({ id }: Props) {
             <div className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
               <span className="text-sm text-slate-600">Mínimo</span>
               <strong className="text-slate-900">
-                {inventoryItem ? `${new Intl.NumberFormat('pt-BR').format(inventoryItem.minimumStock)} ${inventoryItem.unit}` : 'Sem dados'}
+                {inventoryItem ? `${new Intl.NumberFormat('pt-BR').format(normalizeMinimumStock(inventoryItem.minimumStock))} ${inventoryItem.unit}` : 'Sem dados'}
               </strong>
             </div>
             <div className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
@@ -208,6 +244,30 @@ export function ProductViewPage({ id }: Props) {
           </CardContent>
         </Card>
       </section>
+
+      <Dialog open={minimumStockOpen} onOpenChange={setMinimumStockOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar estoque mínimo</DialogTitle>
+            <DialogDescription>Altere somente o limite usado para indicar estoque baixo.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+              <p>Produto: <strong className="text-slate-900">{product.product}</strong></p>
+              <p className="mt-1">Estoque atual: <strong className="text-slate-900">{inventoryItem?.currentStock ?? 0} {inventoryItem?.unit ?? product.unit}</strong></p>
+            </div>
+            <div>
+              <label htmlFor="minimum-stock" className="mb-2 block text-sm font-medium text-slate-700">Estoque mínimo</label>
+              <Input id="minimum-stock" type="number" min="0" step="1" value={minimumStockValue} onChange={(event) => setMinimumStockValue(event.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setMinimumStockOpen(false)} disabled={savingMinimumStock}>Cancelar</Button>
+            <Button type="button" onClick={saveMinimumStock} disabled={savingMinimumStock}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       <ProductReservationDialog
         open={reservationOpen}

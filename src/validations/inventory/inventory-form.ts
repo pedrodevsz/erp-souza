@@ -12,7 +12,6 @@ export const inventoryFormSchema = z
     profitPercentage: z.coerce.number().min(0, 'Porcentagem de lucro é obrigatória'),
     salePrice: z.coerce.number().min(0, 'Preço de venda é obrigatório'),
     currentStock: z.coerce.number().int().min(0, 'Quantidade atual é obrigatória'),
-    minimumStock: z.coerce.number().int().min(0, 'Estoque mínimo é obrigatório'),
     reservedStock: z.coerce.number().int().min(0, 'Estoque reservado é obrigatório'),
     supplier: z.string().min(2, 'Fornecedor é obrigatório').transform(normalizeTextInput),
     location: z.string().min(2, 'Localização é obrigatória').transform(normalizeTextInput),

@@ -317,7 +317,6 @@ export function ProductsList() {
     if (!editing) return
 
     const normalized = normalizeProductInput(values)
-
     try {
       const updated = await ProductService.update(editing.id, normalized)
       setProducts((current) => current.map((product) => (product.id === updated.id ? updated : product)))

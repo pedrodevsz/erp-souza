@@ -3,6 +3,7 @@ import test from 'node:test'
 import mongoose from 'mongoose'
 
 import { normalizeProductInput } from '@/lib/products'
+import { calculateInventoryStatus, DEFAULT_MINIMUM_STOCK, normalizeMinimumStock } from '@/lib/inventories/inventory'
 import { ProductModel } from '@/server/models/products/products.model'
 import { findOrCreateCatalogProduct } from '../purchases/purchases.service'
 import { productCreateSchema } from '@/server/schemas/products/products.schema'
@@ -24,6 +25,19 @@ test('normalizeProductInput preserva marca informada e normaliza ausência', () 
     unit: 'SC',
     brand: 'VOTORAN',
   })
+})
+
+test('default de estoque mínimo e fallback legacy são centralizados', () => {
+  assert.equal(DEFAULT_MINIMUM_STOCK, 5)
+  assert.equal(normalizeMinimumStock(undefined), 5)
+  assert.equal(normalizeMinimumStock(-1), 5)
+  assert.equal(normalizeMinimumStock(8), 8)
+})
+
+test('calculateInventoryStatus usa minimumStock como fonte de verdade', () => {
+  assert.equal(calculateInventoryStatus({ currentStock: 21, minimumStock: 20 }), 'EM_ESTOQUE')
+  assert.equal(calculateInventoryStatus({ currentStock: 20, minimumStock: 20 }), 'ESTOQUE_BAIXO')
+  assert.equal(calculateInventoryStatus({ currentStock: 0, minimumStock: 20 }), 'SEM_ESTOQUE')
 })
 
 test('ProductModel valida produto sem marca e com marca vazia', () => {
