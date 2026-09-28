@@ -4,8 +4,6 @@ export interface Address {
   number: string
   complement: string
   district: string
-  city: string
-  state: string
 }
 
 export interface Customer {

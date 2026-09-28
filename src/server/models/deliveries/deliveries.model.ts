@@ -7,8 +7,6 @@ const deliveryAddressSchema = new Schema(
     number: { type: String, trim: true, default: '', set: normalizeTextInput },
     complement: { type: String, trim: true, default: '', set: normalizeTextInput },
     district: { type: String, trim: true, default: '', set: normalizeTextInput },
-    city: { type: String, trim: true, default: '', set: normalizeTextInput },
-    state: { type: String, trim: true, default: '', set: normalizeTextInput },
   },
   { _id: false }
 )
@@ -35,7 +33,7 @@ const deliverySchema = new Schema(
     customerId: { type: String, required: true, trim: true, index: true },
     customerName: { type: String, required: true, trim: true, index: true, set: normalizeTextInput },
     customerPhone: { type: String, trim: true, default: '', set: normalizeTextInput },
-    address: { type: deliveryAddressSchema, default: () => ({ street: '', number: '', complement: '', district: '', city: '', state: '' }) },
+    address: { type: deliveryAddressSchema, default: () => ({ street: '', number: '', complement: '', district: '' }) },
     scheduledDate: { type: String, required: true, trim: true, index: true },
     deliveredAt: { type: String, default: undefined },
     status: { type: String, required: true, trim: true, index: true, set: normalizeTextInput },
@@ -59,7 +57,6 @@ const deliverySchema = new Schema(
 
 deliverySchema.index({ customerName: 1 })
 deliverySchema.index({ saleNumber: 1 })
-deliverySchema.index({ 'address.city': 1 })
 deliverySchema.index({ driverName: 1 })
 deliverySchema.index({ userId: 1, saleId: 1 }, { unique: true })
 

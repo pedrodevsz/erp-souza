@@ -28,7 +28,6 @@ export function useDeliveries() {
   const setSearch = useDeliveryStore((state) => state.setSearch)
   const setFilters = useDeliveryStore((state) => state.setFilters)
   const setPage = useDeliveryStore((state) => state.setPage)
-  const markAsInRoute = useDeliveryStore((state) => state.markAsInRoute)
   const markItemAsDelivered = useDeliveryStore((state) => state.markItemAsDelivered)
   const markItemAsPending = useDeliveryStore((state) => state.markItemAsPending)
   const completeDelivery = useDeliveryStore((state) => state.completeDelivery)
@@ -94,7 +93,6 @@ export function useDeliveries() {
     setSearch,
     setFilters,
     setPage,
-    markAsInRoute,
     markItemAsDelivered,
     markItemAsPending,
     completeDelivery,

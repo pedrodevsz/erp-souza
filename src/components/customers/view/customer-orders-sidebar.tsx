@@ -15,6 +15,7 @@ import {
   getSalePaymentMethodLabel,
 } from '@/lib/sales'
 import type { Sale } from '@/types/sale'
+import { formatBusinessDate } from '@/lib/business-date'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { RegisterPaymentForm } from '@/components/sales/view/register-payment-form'
 import type { SalePaymentPayload } from '@/components/sales/view/register-payment-form'
@@ -112,8 +113,8 @@ function CustomerSaleActionSheet({
                 columns={2}
                 items={[
                   { label: 'É para entrega?', value: sale.isDelivery ? 'Sim' : 'Não' },
-                  { label: 'Previsão de entrega', value: sale.deliveryDate ? sale.deliveryDate.slice(0, 10) : 'Sem previsão' },
-                  { label: 'Data da venda', value: sale.saleDate.slice(0, 10) },
+                  { label: 'Previsão de entrega', value: sale.deliveryDate ? formatBusinessDate(sale.deliveryDate) : 'Sem previsão' },
+                  { label: 'Data da venda', value: formatBusinessDate(sale.saleDate) },
                   { label: 'Status da entrega', value: sale.deliveryStatus === 'DELIVERED' ? 'Entregue' : 'Pendente' },
                 ]}
               />
@@ -259,7 +260,7 @@ export function CustomerOrdersSidebar({ customerName, sales, open, onOpenChange,
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-slate-900">{createSaleReference(sale.id)}</span>
                           </div>
-                          <p className="mt-1 text-sm text-slate-500">{sale.saleDate.slice(0, 10)}</p>
+                          <p className="mt-1 text-sm text-slate-500">{formatBusinessDate(sale.saleDate)}</p>
                           <p className="mt-1 text-sm text-slate-500">
                             {itemCount} produto(s), {totalQuantity} unidade(s)
                           </p>

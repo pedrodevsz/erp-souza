@@ -7,8 +7,6 @@ const customerAddressSchema = z.object({
   number: z.string().optional().transform(normalizeTextInput),
   complement: z.string().optional().transform(normalizeTextInput),
   district: z.string().optional().transform(normalizeTextInput),
-  city: z.string().optional().transform(normalizeTextInput),
-  state: z.string().optional().transform(normalizeTextInput),
 })
 
 export const customerSchema = z

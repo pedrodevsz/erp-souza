@@ -18,14 +18,11 @@ type Props = {
 
 type FormState = {
   scheduledDate: string
-  driverName: string
   notes: string
   street: string
   number: string
   complement: string
   district: string
-  city: string
-  state: string
 }
 
 export function DeliveryEditPage({ id }: Props) {
@@ -49,14 +46,11 @@ export function DeliveryEditPage({ id }: Props) {
       if (found) {
         setForm({
           scheduledDate: found.scheduledDate.slice(0, 10),
-          driverName: found.driverName ?? '',
           notes: found.notes ?? '',
           street: found.address.street,
           number: found.address.number,
           complement: found.address.complement ?? '',
           district: found.address.district,
-          city: found.address.city,
-          state: found.address.state,
         })
       }
       setLoadingDelivery(false)
@@ -74,15 +68,12 @@ export function DeliveryEditPage({ id }: Props) {
     setSaving(true)
     const updated = await updateDelivery(id, {
       scheduledDate: new Date(form.scheduledDate).toISOString(),
-      driverName: form.driverName,
       notes: form.notes,
       address: {
         street: form.street,
         number: form.number,
         complement: form.complement,
         district: form.district,
-        city: form.city,
-        state: form.state,
       },
     })
     setSaving(false)
@@ -133,10 +124,6 @@ export function DeliveryEditPage({ id }: Props) {
               <Input type="date" value={form.scheduledDate} onChange={(event) => setForm((state) => state && { ...state, scheduledDate: event.target.value })} />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Motorista</label>
-              <Input value={form.driverName} onChange={(event) => setForm((state) => state && { ...state, driverName: event.target.value })} placeholder="Nome do motorista" />
-            </div>
-            <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Observações</label>
               <Textarea value={form.notes} onChange={(event) => setForm((state) => state && { ...state, notes: event.target.value })} placeholder="Anotações da entrega" />
             </div>
@@ -165,16 +152,6 @@ export function DeliveryEditPage({ id }: Props) {
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Bairro</label>
               <Input value={form.district} onChange={(event) => setForm((state) => state && { ...state, district: event.target.value })} />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Cidade</label>
-                <Input value={form.city} onChange={(event) => setForm((state) => state && { ...state, city: event.target.value })} />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Estado</label>
-                <Input value={form.state} onChange={(event) => setForm((state) => state && { ...state, state: event.target.value })} />
-              </div>
             </div>
           </CardContent>
         </Card>

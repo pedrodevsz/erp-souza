@@ -86,17 +86,6 @@ export function CustomerAddressCard() {
                                     {addressErrors?.district && <p className="text-sm text-red-600">{String(addressErrors.district.message)}</p>}
                                 </div>
 
-                                <div>
-                                    <Label>Cidade</Label>
-                                    <Input {...register(`addresses.${index}.city`)} placeholder="Ex.: São Paulo" />
-                                    {addressErrors?.city && <p className="text-sm text-red-600">{String(addressErrors.city.message)}</p>}
-                                </div>
-
-                                <div>
-                                    <Label>Estado</Label>
-                                    <Input {...register(`addresses.${index}.state`)} placeholder="Ex.: SP" maxLength={2} />
-                                    {addressErrors?.state && <p className="text-sm text-red-600">{String(addressErrors.state.message)}</p>}
-                                </div>
                             </div>
                         </div>
                     )

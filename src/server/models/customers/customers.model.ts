@@ -17,8 +17,6 @@ const customerAddressSchema = new Schema(
     number: { type: String, trim: true, default: '', set: normalizeTextInput },
     complement: { type: String, trim: true, default: '', set: normalizeTextInput },
     district: { type: String, trim: true, default: '', set: normalizeTextInput },
-    city: { type: String, trim: true, default: '', set: normalizeTextInput },
-    state: { type: String, trim: true, default: '', set: normalizeTextInput },
   },
   { _id: false }
 )
@@ -77,8 +75,6 @@ export type CustomerDTO = {
     number: string
     complement: string
     district: string
-    city: string
-    state: string
   }>
   notes: string
   createdAt: string

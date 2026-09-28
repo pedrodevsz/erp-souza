@@ -1,6 +1,6 @@
 import type { Delivery, DeliveryFilters, UpdateDelivery } from '@/types/delivery'
 
-type DeliveryQuery = Partial<DeliveryFilters> & {
+type DeliveryQuery = Partial<Pick<DeliveryFilters, 'dateFrom' | 'dateTo'>> & {
   search?: string
 }
 
@@ -44,15 +44,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload.data
 }
 
-function buildQuery(params?: DeliveryQuery) {
+export function buildDeliveryQuery(params?: DeliveryQuery) {
   const searchParams = new URLSearchParams()
 
   if (params?.search) searchParams.set('search', params.search)
-  if (params?.status && params.status !== 'all') searchParams.set('status', params.status)
   if (params?.dateFrom) searchParams.set('dateFrom', params.dateFrom)
   if (params?.dateTo) searchParams.set('dateTo', params.dateTo)
-  if (params?.city) searchParams.set('city', params.city)
-  if (params?.driverName) searchParams.set('driverName', params.driverName)
 
   const query = searchParams.toString()
   return query ? `?${query}` : ''
@@ -60,7 +57,7 @@ function buildQuery(params?: DeliveryQuery) {
 
 export const DeliveryService = {
   async getAll(query?: DeliveryQuery): Promise<Delivery[]> {
-    return request<Delivery[]>(`/api/deliveries${buildQuery(query)}`)
+    return request<Delivery[]>(`/api/deliveries${buildDeliveryQuery(query)}`)
   },
 
   async getById(id: string): Promise<Delivery> {
@@ -72,10 +69,6 @@ export const DeliveryService = {
       method: 'PATCH',
       body: JSON.stringify(data),
     })
-  },
-
-  async markAsInRoute(id: string): Promise<Delivery> {
-    return request<Delivery>(`/api/deliveries/${id}/in-route`, { method: 'PATCH' })
   },
 
   async markItemAsDelivered(deliveryId: string, itemId: string): Promise<Delivery> {

@@ -4,8 +4,6 @@ export type CustomerAddress = {
   number: string
   complement: string
   district: string
-  city: string
-  state: string
 }
 
 export type Customer = {

@@ -75,8 +75,6 @@ function normalizeAddress(address?: CustomerAddressInput | null) {
     number: normalizeTextInput(address?.number),
     complement: normalizeTextInput(address?.complement),
     district: normalizeTextInput(address?.district),
-    city: normalizeTextInput(address?.city),
-    state: normalizeTextInput(address?.state),
   }
 }
 
@@ -97,8 +95,6 @@ function toCustomerDTO(customer: CustomerDocumentShape): CustomerDTO {
       number: address?.number ?? '',
       complement: address?.complement ?? '',
       district: address?.district ?? '',
-      city: address?.city ?? '',
-      state: address?.state ?? '',
     })),
     notes: customer.notes ?? '',
     createdAt: customer.createdAt.toISOString(),

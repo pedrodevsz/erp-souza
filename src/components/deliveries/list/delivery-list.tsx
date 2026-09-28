@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Eye, MoreHorizontal, Pencil, Route } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Eye, MoreHorizontal, Pencil } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { DataTableSection, EmptyStateAction, PageLoading } from '@/components/shared'
 import { Button, Badge, AlertDialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui'
@@ -13,19 +13,19 @@ import { useDeliveries } from '@/hooks/deliveries/useDeliveries'
 import { DELIVERY_STATUS_LABELS, DELIVERY_STATUS_VARIANTS, formatDate, getDeliveryItemProgress } from '@/lib/deliveries'
 import { useDeliveryStore } from '@/stores/useDeliveryStore'
 
-function formatDeliveryLocation(city?: string, state?: string) {
-  const normalizedCity = city?.trim()
-  const normalizedState = state?.trim()
+function formatDeliveryLocation(street?: string, number?: string) {
+  const normalizedStreet = street?.trim()
+  const normalizedNumber = number?.trim()
 
-  if (!normalizedCity && !normalizedState) {
+  if (!normalizedStreet && !normalizedNumber) {
     return 'Não informado'
   }
 
-  if (normalizedCity && normalizedState) {
-    return `${normalizedCity}/${normalizedState}`
+  if (normalizedStreet && normalizedNumber) {
+    return `${normalizedStreet}, ${normalizedNumber}`
   }
 
-  return normalizedCity || normalizedState || 'Não informado'
+  return normalizedStreet || normalizedNumber || 'Não informado'
 }
 
 export function DeliveryList() {
@@ -44,7 +44,6 @@ export function DeliveryList() {
     setFilters,
     summary,
     hydrated,
-    markAsInRoute,
     completeDelivery,
     cancelDelivery,
   } = useDeliveries()
@@ -57,19 +56,6 @@ export function DeliveryList() {
   const openCancel = (id: string) => {
     setSelectedId(id)
     setCancelOpen(true)
-  }
-
-  const handleMarkInRoute = async (id: string) => {
-    const updated = await markAsInRoute(id)
-    if (updated) {
-      toast.push({ title: 'Sucesso', description: 'Entrega marcada como em rota.', type: 'success' })
-    } else {
-      toast.push({
-        title: 'Erro',
-        description: useDeliveryStore.getState().error ?? 'Não foi possível atualizar a entrega.',
-        type: 'error',
-      })
-    }
   }
 
   const handleCompleteDelivery = async (id: string) => {
@@ -108,7 +94,7 @@ export function DeliveryList() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Entregas" description="Acompanhe pedidos em rota, pendentes, concluídos e atrasados." />
+      <PageHeader title="Entregas" description="Acompanhe pedidos pendentes, concluídos e atrasados." />
 
       <DeliverySummaryCards
         deliveriesToday={summary.deliveriesToday}
@@ -132,11 +118,8 @@ export function DeliveryList() {
           setShowAllDeliveries(false)
           setSearch('')
           setFilters({
-            status: 'all',
             dateFrom: '',
             dateTo: '',
-            city: '',
-            driverName: '',
           })
         }}
       />
@@ -149,20 +132,19 @@ export function DeliveryList() {
           { header: 'Cliente', className: 'w-[240px] min-w-[240px] px-4' },
           { header: 'Venda', className: 'w-28 whitespace-nowrap px-4' },
           { header: 'Data Agendada', className: 'w-32 whitespace-nowrap px-4' },
-          { header: 'Cidade', className: 'w-40 whitespace-nowrap px-4' },
+          { header: 'Endereço', className: 'w-40 whitespace-nowrap px-4' },
           { header: 'Produtos', className: 'w-40 whitespace-nowrap px-4' },
           { header: 'Status', className: 'w-40 whitespace-nowrap px-4' },
-          { header: 'Motorista', className: 'w-[180px] min-w-[180px] px-4' },
-          { header: 'Ações', className: 'w-[140px] whitespace-nowrap px-4 text-center' },
+                    { header: 'Ações', className: 'w-[140px] whitespace-nowrap px-4 text-center' },
         ]}
         rowCount={deliveries.length}
-        colSpan={8}
+        colSpan={7}
         loading={loading}
         emptyContent={
           <EmptyStateAction
-            title={search.trim() || filters.status !== 'all' || filters.dateFrom || filters.dateTo || filters.city || filters.driverName ? 'Sem resultado' : 'Sem entregas'}
+            title={search.trim() || filters.dateFrom || filters.dateTo ? 'Sem resultado' : 'Sem entregas'}
             description={
-              search.trim() || filters.status !== 'all' || filters.dateFrom || filters.dateTo || filters.city || filters.driverName
+              search.trim() || filters.dateFrom || filters.dateTo
                 ? 'Ajuste os filtros para encontrar a entrega.'
                 : 'As entregas confirmadas em vendas aparecerão aqui.'
             }
@@ -224,7 +206,7 @@ export function DeliveryList() {
               <td className="px-4 py-3 align-middle whitespace-nowrap font-medium">{delivery.saleNumber}</td>
               <td className="px-4 py-3 align-middle whitespace-nowrap">{formatDate(delivery.scheduledDate)}</td>
               <td className="px-4 py-3 align-middle whitespace-nowrap">
-                {formatDeliveryLocation(delivery.address.city, delivery.address.state)}
+                {formatDeliveryLocation(delivery.address.street, delivery.address.number)}
               </td>
               <td className="px-4 py-3 align-middle whitespace-nowrap">
                 {progress.delivered}/{progress.total}
@@ -232,7 +214,6 @@ export function DeliveryList() {
               <td className="px-4 py-3 align-middle whitespace-nowrap">
                 <Badge variant={DELIVERY_STATUS_VARIANTS[delivery.status]}>{DELIVERY_STATUS_LABELS[delivery.status]}</Badge>
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap">{delivery.driverName?.trim() || 'Não informado'}</td>
               <td className="px-4 py-3 align-middle whitespace-nowrap text-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -254,13 +235,6 @@ export function DeliveryList() {
                     <DropdownMenuItem onClick={() => router.push(`/dashboard/deliveries/${delivery.id}/edit`)}>
                       <Pencil className="h-4 w-4" />
                       Editar
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleMarkInRoute(delivery.id)}
-                      disabled={delivery.status === 'CANCELLED' || delivery.status === 'DELIVERED'}
-                    >
-                      <Route className="h-4 w-4" />
-                      Em rota
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => handleCompleteDelivery(delivery.id)}
@@ -285,7 +259,7 @@ export function DeliveryList() {
         })}
         {hasMoreDeliveries && (
           <tr>
-            <td colSpan={8} className="px-4 py-4">
+            <td colSpan={7} className="px-4 py-4">
               <div className="flex justify-center">
                 <Button
                   type="button"

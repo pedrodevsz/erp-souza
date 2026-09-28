@@ -23,7 +23,6 @@ export function DeliveryViewPage({ id }: Props) {
   const {
     hydrated,
     findDeliveryById,
-    markAsInRoute,
     markItemAsDelivered,
     markItemAsPending,
     completeDelivery,
@@ -56,21 +55,6 @@ export function DeliveryViewPage({ id }: Props) {
       clearSelectedDelivery()
     }
   }, [clearSelectedDelivery, findDeliveryById, hydrated, id, selectDelivery])
-
-  const handleMarkInRoute = async () => {
-    const updated = await markAsInRoute(id)
-    if (updated) {
-      setDelivery(updated)
-      toast.push({ title: 'Sucesso', description: 'Entrega marcada como em rota.', type: 'success' })
-      return
-    }
-
-    toast.push({
-      title: 'Erro',
-      description: useDeliveryStore.getState().error ?? 'Não foi possível atualizar a entrega.',
-      type: 'error',
-    })
-  }
 
   const confirmComplete = async () => {
     const updated = await completeDelivery(id)
@@ -137,7 +121,6 @@ export function DeliveryViewPage({ id }: Props) {
 
       <DeliveryActions
         deliveryStatus={delivery.status}
-        onMarkInRoute={handleMarkInRoute}
         onCompleteDelivery={confirmComplete}
         onEdit={() => router.push(`/dashboard/deliveries/${delivery.id}/edit`)}
         onCancel={() => setCancelOpen(true)}

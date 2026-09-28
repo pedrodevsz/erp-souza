@@ -1,7 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button, Input, Select } from '@/components/ui'
+import { Button, Input } from '@/components/ui'
 import type { DeliveryFilters } from '@/types/delivery'
 import { RefreshCcwIcon } from 'lucide-react'
 
@@ -19,7 +19,7 @@ export function DeliveryFiltersCard({ search, filters, onSearchChange, onFilters
       <CardHeader className="space-y-1">
         <div>
           <CardTitle className="text-base font-semibold text-slate-900">Filtros</CardTitle>
-          <p className="text-sm text-slate-500">Filtre entregas por status, cidade, motorista e intervalo de datas.</p>
+          <p className="text-sm text-slate-500">Filtre entregas por busca e intervalo de datas.</p>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -27,30 +27,6 @@ export function DeliveryFiltersCard({ search, filters, onSearchChange, onFilters
           <div className="lg:col-span-2">
             <label className="mb-2 block text-sm font-medium text-slate-700">Buscar</label>
             <Input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Cliente, venda ou produto" />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Status</label>
-            <Select value={filters.status} onChange={(event) => onFiltersChange({ status: event.target.value as DeliveryFilters['status'] })}>
-              <option value="all">Todos</option>
-              <option value="PENDING">Pendente</option>
-              <option value="IN_ROUTE">Em rota</option>
-              <option value="PARTIALLY_DELIVERED">Parcialmente entregue</option>
-              <option value="DELIVERED">Entregue</option>
-              <option value="CANCELLED">Cancelada</option>
-              <option value="LATE">Atrasada</option>
-            </Select>
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Cidade</label>
-            <Input value={filters.city} onChange={(event) => onFiltersChange({ city: event.target.value })} placeholder="Filtrar cidade" />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Motorista</label>
-            <Input
-              value={filters.driverName}
-              onChange={(event) => onFiltersChange({ driverName: event.target.value })}
-              placeholder="Filtrar motorista"
-            />
           </div>
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">Data inicial</label>

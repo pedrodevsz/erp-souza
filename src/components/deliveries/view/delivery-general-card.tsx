@@ -32,7 +32,6 @@ export function DeliveryGeneralCard({ delivery }: Props) {
             { label: 'Telefone', value: delivery.customerPhone },
             { label: 'Venda', value: delivery.saleNumber || delivery.saleId },
             { label: 'Status', value: <Badge variant={DELIVERY_STATUS_VARIANTS[delivery.status]}>{DELIVERY_STATUS_LABELS[delivery.status]}</Badge> },
-            { label: 'Motorista', value: delivery.driverName?.trim() || 'Não informado' },
             { label: 'É para entrega?', value: <Badge variant="success">Entrega</Badge> },
             { label: 'Data agendada', value: formatDate(delivery.scheduledDate) },
             { label: 'Entregue em', value: formatDateTime(delivery.deliveredAt) },

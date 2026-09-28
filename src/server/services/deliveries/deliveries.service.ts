@@ -73,8 +73,6 @@ function toDeliveryDTO(delivery: DeliveryDocumentShape): Delivery {
       number: delivery.address?.number ?? '',
       complement: delivery.address?.complement ?? '',
       district: delivery.address?.district ?? '',
-      city: delivery.address?.city ?? '',
-      state: delivery.address?.state ?? '',
     },
     scheduledDate: delivery.scheduledDate,
     deliveredAt: delivery.deliveredAt || undefined,
@@ -95,7 +93,7 @@ function toDeliveryDTO(delivery: DeliveryDocumentShape): Delivery {
 
 function buildDeliveryFromSale(
   sale: SaleDocumentShape,
-  customer: { phone?: string; addresses?: Array<{ street?: string; number?: string; complement?: string; district?: string; city?: string; state?: string }> } | null
+  customer: { phone?: string; addresses?: Array<{ street?: string; number?: string; complement?: string; district?: string }> } | null
 ) {
   const firstAddress = customer?.addresses?.[0]
   const delivered = sale.deliveryStatus !== 'PENDING'
@@ -122,8 +120,6 @@ function buildDeliveryFromSale(
       number: normalizeOptionalText(firstAddress?.number),
       complement: normalizeOptionalText(firstAddress?.complement),
       district: normalizeOptionalText(firstAddress?.district),
-      city: normalizeOptionalText(firstAddress?.city),
-      state: normalizeOptionalText(firstAddress?.state),
     },
     scheduledDate: sale.deliveryDate || sale.saleDate,
     deliveredAt: delivered ? nowISO() : undefined,
@@ -147,7 +143,7 @@ async function syncDeliveriesFromSales(userId: string, session?: ClientSession) 
 
   const customerIds = Array.from(new Set(missingSales.map((sale) => sale.customerId)))
   const customers = await CustomerModel.find({ userId, _id: { $in: customerIds } })
-    .lean<Array<{ _id: mongoose.Types.ObjectId; phone?: string; addresses?: Array<{ street?: string; number?: string; complement?: string; district?: string; city?: string; state?: string }> }>>()
+    .lean<Array<{ _id: mongoose.Types.ObjectId; phone?: string; addresses?: Array<{ street?: string; number?: string; complement?: string; district?: string }> }>>()
 
   const customerMap = new Map(customers.map((customer) => [String(customer._id), customer]))
   const docs = missingSales.map((sale) => buildDeliveryFromSale(sale, customerMap.get(sale.customerId) ?? null))
@@ -204,7 +200,6 @@ function applyUpdate(delivery: DeliveryDocumentShape, payload: UpdateDeliveryInp
     }
   }
   if (payload.scheduledDate !== undefined) delivery.scheduledDate = payload.scheduledDate
-  if (payload.driverName !== undefined) delivery.driverName = normalizeTextInput(payload.driverName)
   if (payload.notes !== undefined) delivery.notes = normalizeTextInput(payload.notes)
 }
 
@@ -216,8 +211,6 @@ function matchesSearch(delivery: Delivery, search?: string) {
     delivery.customerName.toLowerCase().includes(query) ||
     delivery.saleId.toLowerCase().includes(query) ||
     delivery.saleNumber.toLowerCase().includes(query) ||
-    (delivery.driverName ?? '').toLowerCase().includes(query) ||
-    delivery.address.city.toLowerCase().includes(query) ||
     delivery.items.some((item) => item.productName.toLowerCase().includes(query) || item.sku.toLowerCase().includes(query))
   )
 }
@@ -238,10 +231,9 @@ export const DeliveryService = {
         const matchesStatus = !parsed.status || effectiveStatus === parsed.status
         const matchesDateFrom = !parsed.dateFrom || isSameOrAfter(delivery.scheduledDate, parsed.dateFrom)
         const matchesDateTo = !parsed.dateTo || isSameOrBefore(delivery.scheduledDate, parsed.dateTo)
-        const matchesCity = !parsed.city || delivery.address.city.toLowerCase().includes(parsed.city.toLowerCase())
         const matchesDriver = !parsed.driverName || (delivery.driverName ?? '').toLowerCase().includes(parsed.driverName.toLowerCase())
 
-        return matchesSearch(delivery, parsed.search) && matchesStatus && matchesDateFrom && matchesDateTo && matchesCity && matchesDriver
+        return matchesSearch(delivery, parsed.search) && matchesStatus && matchesDateFrom && matchesDateTo && matchesDriver
       })
       .map((delivery) => ({
         ...delivery,
@@ -266,7 +258,7 @@ export const DeliveryService = {
     const delivery = await findDeliveryOrThrow(id, currentUser.id)
     ensureNotCancelled(delivery)
 
-    if (parsed.status && !['PENDING', 'IN_ROUTE', 'PARTIALLY_DELIVERED', 'LATE'].includes(parsed.status)) {
+    if (parsed.status && !['PENDING', 'PARTIALLY_DELIVERED', 'LATE'].includes(parsed.status)) {
       throw new AppError('Status não permitido por esta rota.', 400)
     }
 
@@ -283,24 +275,6 @@ export const DeliveryService = {
     }
   },
 
-  async markAsInRoute(id: string) {
-    await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    const delivery = await findDeliveryOrThrow(id, currentUser.id)
-    ensureNotCancelled(delivery)
-
-    if (delivery.status !== 'DELIVERED') {
-      delivery.status = 'IN_ROUTE'
-      delivery.updatedAt = new Date()
-      await delivery.save()
-      await syncSaleDeliveryStatus(delivery, currentUser.id)
-    }
-
-    return {
-      ...toDeliveryDTO(delivery),
-      status: normalizeEffectiveStatus(toDeliveryDTO(delivery)),
-    }
-  },
 
   async markItemAsDelivered(deliveryId: string, itemId: string) {
     await connectToDatabase()
