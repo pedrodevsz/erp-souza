@@ -4,11 +4,8 @@ import { DeliveryService } from '@/services/deliveries/deliveryService'
 import type { Delivery, DeliveryFilters, UpdateDelivery } from '@/types/delivery'
 
 export const DEFAULT_DELIVERY_FILTERS: DeliveryFilters = {
-  status: 'all',
   dateFrom: '',
   dateTo: '',
-  city: '',
-  driverName: '',
 }
 
 type State = {
@@ -31,7 +28,6 @@ type Actions = {
   setSearch: (value: string) => void
   setFilters: (filters: Partial<DeliveryFilters>) => void
   setPage: (page: number) => void
-  markAsInRoute: (id: string) => Promise<Delivery | null>
   markItemAsDelivered: (deliveryId: string, itemId: string) => Promise<Delivery | null>
   markItemAsPending: (deliveryId: string, itemId: string) => Promise<Delivery | null>
   completeDelivery: (id: string) => Promise<Delivery | null>
@@ -133,28 +129,6 @@ const createStore = () =>
           })),
 
         setPage: (page) => set({ page }),
-
-        markAsInRoute: async (id) => {
-          set({ loading: true, error: null })
-          try {
-            const updated = await DeliveryService.markAsInRoute(id)
-            if (!updated) {
-              set({ error: 'Entrega não encontrada', loading: false })
-              return null
-            }
-
-            set((state) => ({
-              deliveries: state.deliveries.map((delivery) => (delivery.id === id ? updated : delivery)),
-              selectedDelivery: state.selectedDelivery?.id === id ? updated : state.selectedDelivery,
-              loading: false,
-            }))
-            void refreshSalesList()
-            return updated
-          } catch (error: unknown) {
-            set({ error: getErrorMessage(error, 'Erro ao atualizar entrega'), loading: false })
-            return null
-          }
-        },
 
         markItemAsDelivered: async (deliveryId, itemId) => {
           set({ loading: true, error: null })

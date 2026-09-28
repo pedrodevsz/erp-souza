@@ -15,8 +15,6 @@ function normalizeAddress(address?: Partial<Customer['addresses'][number]> | nul
         number: address?.number ?? '',
         complement: address?.complement ?? '',
         district: address?.district ?? '',
-        city: address?.city ?? '',
-        state: address?.state ?? '',
     }
 }
 

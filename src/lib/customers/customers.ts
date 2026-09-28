@@ -8,8 +8,6 @@ export const CUSTOMER_EMPTY_ADDRESS = {
     number: '',
     complement: '',
     district: '',
-    city: '',
-    state: '',
 }
 
 export const CUSTOMER_FORM_DEFAULT_VALUES: CustomerFormValues = {
@@ -48,8 +46,6 @@ export function buildCustomerPayload(values: CustomerFormValues): NewCustomer {
             number: address.number ?? '',
             complement: address.complement ?? '',
             district: address.district ?? '',
-            city: address.city ?? '',
-            state: address.state ?? '',
         }))
         .filter((address) => Object.values(address).some((field) => hasMeaningfulText(field)))
 
@@ -63,8 +59,6 @@ export function buildCustomerPayload(values: CustomerFormValues): NewCustomer {
             number: normalizeTextInput(address.number),
             complement: normalizeTextInput(address.complement),
             district: normalizeTextInput(address.district),
-            city: normalizeTextInput(address.city),
-            state: normalizeTextInput(address.state),
         })),
         notes: normalizeTextInput(values.notes ?? ''),
     }

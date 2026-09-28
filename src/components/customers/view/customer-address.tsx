@@ -21,9 +21,6 @@ export function CustomerAddress({ addresses }: Props) {
                         <div key={`${address.zipCode}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                             <div className="mb-3 flex items-center justify-between gap-3">
                                 <Badge variant="neutral">Endereço {index + 1}</Badge>
-                                {address.city || address.state ? (
-                                    <span className="text-xs text-slate-500">{[address.city, address.state].filter(Boolean).join('/')}</span>
-                                ) : null}
                             </div>
                             <DefinitionList
                                 columns={2}
@@ -33,8 +30,6 @@ export function CustomerAddress({ addresses }: Props) {
                                     { label: 'Número', value: address.number, hidden: !address.number?.trim() },
                                     { label: 'Complemento', value: address.complement, hidden: !address.complement?.trim() },
                                     { label: 'Bairro', value: address.district, hidden: !address.district?.trim() },
-                                    { label: 'Cidade', value: address.city, hidden: !address.city?.trim() },
-                                    { label: 'Estado', value: address.state, hidden: !address.state?.trim() },
                                 ]}
                             />
                         </div>

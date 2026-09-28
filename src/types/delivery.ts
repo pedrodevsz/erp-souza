@@ -5,8 +5,6 @@ export interface DeliveryAddress {
   number: string
   complement?: string
   district: string
-  city: string
-  state: string
 }
 
 export interface DeliveryItem {
@@ -41,9 +39,6 @@ export interface Delivery {
 export type UpdateDelivery = Partial<Omit<Delivery, 'id' | 'createdAt' | 'updatedAt'>>
 
 export type DeliveryFilters = {
-  status: 'all' | DeliveryStatus
   dateFrom: string
   dateTo: string
-  city: string
-  driverName: string
 }

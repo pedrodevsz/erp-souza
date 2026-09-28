@@ -180,12 +180,10 @@ export function CustomersList() {
               { header: 'Nome' },
               { header: 'CPF/CNPJ' },
               { header: 'Telefone' },
-              { header: 'Cidade' },
-              { header: 'Estado' },
               { header: 'Ações' },
             ]}
             rowCount={customers.length}
-            colSpan={6}
+            colSpan={4}
             loading={loading}
             emptyContent={
               <EmptyStateAction
@@ -201,8 +199,6 @@ export function CustomersList() {
                 <td className="p-2 align-middle">{c.name}</td>
                 <td className="p-2 align-middle">{renderValue(c.document, 'Não informado')}</td>
                 <td className="p-2 align-middle">{renderValue(c.phone, 'Não informado')}</td>
-                <td className="p-2 align-middle">{renderValue(getPrimaryCustomerAddress(c).city, 'Não informado')}</td>
-                <td className="p-2 align-middle">{renderValue(getPrimaryCustomerAddress(c).state, 'Não informado')}</td>
                 <td className="p-2 align-middle">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

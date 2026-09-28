@@ -26,8 +26,6 @@ function normalizeAddress(address) {
     number: normalizeText(address.number),
     complement: normalizeText(address.complement),
     district: normalizeText(address.district),
-    city: normalizeText(address.city),
-    state: normalizeText(address.state),
   }
 }
 

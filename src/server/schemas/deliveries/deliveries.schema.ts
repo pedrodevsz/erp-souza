@@ -6,8 +6,6 @@ const deliveryAddressSchema = z.object({
   number: z.string().trim().min(1, 'Número é obrigatório.').transform(normalizeTextInput),
   complement: z.string().trim().transform(normalizeTextInput).optional(),
   district: z.string().trim().min(1, 'Bairro é obrigatório.').transform(normalizeTextInput),
-  city: z.string().trim().min(1, 'Cidade é obrigatória.').transform(normalizeTextInput),
-  state: z.string().trim().min(2, 'Estado é obrigatório.').transform(normalizeTextInput),
 })
 
 const deliveryItemSchema = z.object({
@@ -30,8 +28,7 @@ const deliveryBaseSchema = z.object({
   address: deliveryAddressSchema,
   scheduledDate: z.string().trim().min(1, 'Data agendada é obrigatória.'),
   deliveredAt: z.string().trim().optional(),
-  status: z.enum(['PENDING', 'IN_ROUTE', 'PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED', 'LATE']).optional(),
-  driverName: z.string().trim().transform(normalizeTextInput).optional(),
+  status: z.enum(['PENDING', 'PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED', 'LATE']).optional(),
   notes: z.string().trim().transform(normalizeTextInput).optional(),
   items: z.array(deliveryItemSchema).min(1, 'Adicione ao menos um item.'),
 })
@@ -41,7 +38,6 @@ export const deliveryListQuerySchema = z.object({
   status: z.enum(['PENDING', 'IN_ROUTE', 'PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED', 'LATE']).optional(),
   dateFrom: z.string().trim().optional(),
   dateTo: z.string().trim().optional(),
-  city: z.string().trim().optional(),
   driverName: z.string().trim().optional(),
 })
 
@@ -64,4 +60,3 @@ export type DeliveryListQuery = z.infer<typeof deliveryListQuerySchema>
 export type DeliveryIdParam = z.infer<typeof deliveryIdParamSchema>
 export type DeliveryItemIdParam = z.infer<typeof deliveryItemIdParamSchema>
 export type UpdateDeliveryInput = z.infer<typeof deliveryUpdateSchema>
-
