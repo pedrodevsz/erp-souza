@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { usePurchaseStore } from '@/stores/purchases/usePurchaseStore'
+import { getTodayBusinessDate, normalizeBusinessDate } from '@/lib/business-date'
 
 export function usePurchases() {
     const purchases = usePurchaseStore((s) => s.purchases)
@@ -33,16 +34,14 @@ export function usePurchases() {
     }, [page, pageSize, purchases, totalPages])
 
     const summary = useMemo(() => {
-        const currentMonth = new Date().getMonth()
-        const currentYear = new Date().getFullYear()
+        const currentMonth = getTodayBusinessDate().slice(0, 7)
 
         return purchases.reduce(
             (acc, purchase) => {
                 acc.totalPurchases += 1
                 acc.totalAmount += purchase.total
 
-                const purchaseDate = new Date(purchase.purchaseDate)
-                if (purchaseDate.getMonth() === currentMonth && purchaseDate.getFullYear() === currentYear) {
+                if (normalizeBusinessDate(purchase.purchaseDate).slice(0, 7) === currentMonth) {
                     acc.monthlyPurchases += 1
                 }
 

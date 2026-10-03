@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui'
 import { DefinitionList, SectionCard } from '@/components/shared'
 import type { PurchasePaymentCondition } from '@/types/purchases'
 import { getPurchasePaymentConditionValues } from '@/lib/purchases'
+import { formatBusinessDate } from '@/lib/business-date'
 
 type Props = {
     invoiceNumber?: string | null
@@ -24,7 +25,7 @@ export function PurchaseHeader({ invoiceNumber, supplier, purchaseDate, paymentM
                 columns={2}
                 items={[
                     { label: 'Fornecedor', value: supplier },
-                    { label: 'Data', value: purchaseDate.slice(0, 10) },
+                    { label: 'Data', value: formatBusinessDate(purchaseDate) },
                     { label: 'Número da NF', value: invoiceNumber, hidden: !invoiceNumber?.trim() },
                     {
                         label: 'Condição de Pagamento',

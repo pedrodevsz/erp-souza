@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { formatBusinessDate, getTodayBusinessDate, normalizeBusinessDate } from './business-date'
+import { BUSINESS_TIME_ZONE, formatBusinessDate, getTodayBusinessDate, normalizeBusinessDate } from './business-date'
 
 test('formata datas civis sem aplicar timezone', () => {
   for (const [input, expected] of [
@@ -21,6 +21,7 @@ test('normaliza registros legados para a parte civil sem converter o dia', () =>
 })
 
 test('data civil atual usa o calendario local, não UTC', () => {
+  assert.equal(BUSINESS_TIME_ZONE, 'America/Sao_Paulo')
   assert.equal(getTodayBusinessDate(new Date(2026, 8, 23, 21, 4)), '2026-09-23')
   assert.equal(getTodayBusinessDate(new Date('2026-09-26T00:08:39.000Z'), 'America/Sao_Paulo'), '2026-09-25')
   assert.equal(getTodayBusinessDate(new Date('2026-09-26T00:08:39.000Z'), 'UTC'), '2026-09-26')
