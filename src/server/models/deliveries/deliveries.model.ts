@@ -27,7 +27,10 @@ const deliveryItemSchema = new Schema(
 
 const deliverySchema = new Schema(
   {
+    storeId: { type: String, required: true, trim: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     saleId: { type: String, required: true, trim: true, index: true },
     saleNumber: { type: String, required: true, trim: true, index: true, set: normalizeTextInput },
     customerId: { type: String, required: true, trim: true, index: true },
@@ -58,7 +61,7 @@ const deliverySchema = new Schema(
 deliverySchema.index({ customerName: 1 })
 deliverySchema.index({ saleNumber: 1 })
 deliverySchema.index({ driverName: 1 })
-deliverySchema.index({ userId: 1, saleId: 1 }, { unique: true })
+deliverySchema.index({ storeId: 1, saleId: 1 }, { unique: true })
 
 export type DeliveryModelFields = InferSchemaType<typeof deliverySchema>
 

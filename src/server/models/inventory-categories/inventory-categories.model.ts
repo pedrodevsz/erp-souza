@@ -3,7 +3,10 @@ import { normalizeTextInput } from '@/lib/text'
 
 const inventoryCategorySchema = new Schema(
   {
+    storeId: { type: String, required: true, trim: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     name: { type: String, required: true, trim: true, index: true, set: normalizeTextInput },
   },
   {
@@ -20,7 +23,7 @@ const inventoryCategorySchema = new Schema(
   }
 )
 
-inventoryCategorySchema.index({ userId: 1, name: 1 }, { unique: true })
+inventoryCategorySchema.index({ storeId: 1, name: 1 }, { unique: true })
 
 export type InventoryCategoryModelFields = InferSchemaType<typeof inventoryCategorySchema>
 

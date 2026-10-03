@@ -1,0 +1,25 @@
+{
+  "storeId": "erp-souza-main-store",
+  "approvedOwnerIds": ["<owner-object-id-reviewed>"],
+  "authorizedUserIds": ["<active-user-object-id-reviewed>"],
+  "expectedCounts": {
+    "customers": 6,
+    "products": 10,
+    "inventories": 10,
+    "inventorymovements": 17,
+    "inventorycategories": 0,
+    "suppliers": 4,
+    "purchases": 5,
+    "sales": 5,
+    "deliveries": 5,
+    "productreservations": 0,
+    "employees": 5
+  },
+  "authorization": {
+    "target": "rehearsal",
+    "database": "erp_souza_rehearsal",
+    "backupConfirmed": true,
+    "rehearsalConfirmed": false,
+    "approvalNote": "Substituir placeholders somente apos backup e aprovacao humana. Nao versionar IDs reais."
+  }
+}

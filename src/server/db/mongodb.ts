@@ -27,15 +27,11 @@ export async function connectToDatabase() {
     cached.promise = mongoose
       .connect(uri, {
         bufferCommands: false,
+        autoIndex: false,
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         cached.promise = null
-        throw new AppError(
-          error instanceof Error
-            ? `Falha ao conectar ao MongoDB Atlas: ${error.message}`
-            : 'Falha ao conectar ao MongoDB Atlas.',
-          503
-        )
+        throw new AppError('Serviço de dados temporariamente indisponível.', 503)
       })
   }
 

@@ -3,7 +3,10 @@ import { normalizeTextInput } from '@/lib/text'
 
 const productReservationSchema = new Schema(
   {
+    storeId: { type: String, required: true, trim: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     productId: { type: String, required: true, trim: true, index: true },
     inventoryId: { type: String, required: true, trim: true, index: true },
     productName: { type: String, required: true, trim: true, index: true, set: normalizeTextInput },
@@ -30,7 +33,7 @@ const productReservationSchema = new Schema(
 )
 
 productReservationSchema.index({ productId: 1, customerId: 1, reservedAt: -1 })
-productReservationSchema.index({ userId: 1, productId: 1, customerId: 1, reservedAt: -1 })
+productReservationSchema.index({ storeId: 1, productId: 1, customerId: 1, reservedAt: -1 })
 
 export type ProductReservationModelFields = InferSchemaType<typeof productReservationSchema>
 

@@ -3,7 +3,9 @@ import { normalizeTextInput } from '@/lib/text'
 
 const inventoryMovementSchema = new Schema(
   {
+    storeId: { type: String, required: true, trim: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    actorId: { type: Schema.Types.ObjectId, ref: 'User' },
     itemId: { type: String, required: true, trim: true, index: true },
     type: { type: String, required: true, trim: true, index: true, set: normalizeTextInput },
     quantity: { type: Number, required: true, min: 0 },
@@ -26,7 +28,10 @@ const inventoryMovementSchema = new Schema(
 
 const inventorySchema = new Schema(
   {
+    storeId: { type: String, required: true, trim: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     productId: { type: String, required: true, trim: true },
     productName: { type: String, required: true, trim: true, index: true, set: normalizeTextInput },
     brand: { type: String, required: false, trim: true, index: true, default: '', set: normalizeTextInput },
@@ -61,12 +66,12 @@ const inventorySchema = new Schema(
   }
 )
 
-inventorySchema.index({ userId: 1, productName: 1, unit: 1, brand: 1 }, { unique: true })
-inventorySchema.index({ userId: 1, sku: 1 }, { unique: true })
-inventorySchema.index({ userId: 1, productId: 1 }, { unique: true })
+inventorySchema.index({ storeId: 1, productName: 1, unit: 1, brand: 1 }, { unique: true })
+inventorySchema.index({ storeId: 1, sku: 1 }, { unique: true })
+inventorySchema.index({ storeId: 1, productId: 1 }, { unique: true })
 
 inventoryMovementSchema.index({ itemId: 1, date: -1 })
-inventoryMovementSchema.index({ userId: 1, itemId: 1, date: -1 })
+inventoryMovementSchema.index({ storeId: 1, itemId: 1, date: -1 })
 
 export type InventoryModelFields = InferSchemaType<typeof inventorySchema>
 export type InventoryMovementModelFields = InferSchemaType<typeof inventoryMovementSchema>

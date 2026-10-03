@@ -22,7 +22,10 @@ const purchaseItemSchema = new Schema(
 
 const purchaseSchema = new Schema(
   {
+    storeId: { type: String, required: true, trim: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     supplier: { type: String, required: true, trim: true, index: true, set: normalizeTextInput },
     purchaseDate: { type: String, required: true, trim: true, index: true },
     expectedDelivery: { type: String, trim: true, default: '', set: normalizeTextInput },
