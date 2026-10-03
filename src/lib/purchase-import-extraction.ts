@@ -8,17 +8,21 @@ export function normalizeExtractedText(value: unknown): string | null {
     return null
 }
 
-export function summarizePurchaseImportPayload(payload: any) {
-    if (!payload) return null
+export function summarizePurchaseImportPayload(payload: unknown) {
+    if (!payload || typeof payload !== 'object') return null
 
-    const items = Array.isArray(payload.items) ? payload.items : []
+    const value = payload as Record<string, unknown>
+
+    const items = Array.isArray(value.items) ? value.items : []
 
     return {
-        supplier: payload.supplier ?? payload.supplierId ?? null,
-        invoiceNumber: payload.invoiceNumber ?? payload.invoice ?? null,
-        total: payload.total ?? payload.subtotal ?? null,
+        supplier: value.supplier ?? value.supplierId ?? null,
+        invoiceNumber: value.invoiceNumber ?? value.invoice ?? null,
+        total: value.total ?? value.subtotal ?? null,
         totalItems: items.length,
     }
 }
 
-export default { normalizeExtractedText, summarizePurchaseImportPayload }
+const purchaseImportExtraction = { normalizeExtractedText, summarizePurchaseImportPayload }
+
+export default purchaseImportExtraction
