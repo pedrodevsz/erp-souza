@@ -27,8 +27,6 @@ const baseDelivery = {
     number: '',
     complement: '',
     district: '',
-    city: '',
-    state: '',
   },
   scheduledDate: '2026-07-21T12:00:00.000Z',
   status: 'PENDING' as const,

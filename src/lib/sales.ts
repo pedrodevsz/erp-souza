@@ -43,11 +43,13 @@ export const SALE_QUANTITY_STEP = 0.5
 export const SALE_DELIVERY_STATUS_LABELS: Record<SaleDeliveryStatus, string> = {
   PENDING: 'Pendente',
   DELIVERED: 'Entregue',
+  CANCELLED: 'Cancelada',
 }
 
 export const SALE_DELIVERY_STATUS_VARIANTS: Record<SaleDeliveryStatus, string> = {
   PENDING: 'warning',
   DELIVERED: 'success',
+  CANCELLED: 'destructive',
 }
 
 export const SALE_STATUS_LABELS = SALE_DELIVERY_STATUS_LABELS
@@ -374,7 +376,7 @@ export function getSaleDeliveryFlagVariant(isDelivery: boolean) {
 
 export function normalizeSaleDeliveryStatus(value: string | null | undefined): SaleDeliveryStatus {
   const normalized = value?.trim().toUpperCase()
-  if (normalized === 'PENDING' || normalized === 'DELIVERED') return normalized
+  if (normalized === 'PENDING' || normalized === 'DELIVERED' || normalized === 'CANCELLED') return normalized
   if (normalized === 'ENTREGAR') return 'PENDING'
   if (normalized === 'ENTREGUE' || normalized === 'CONFIRMED') return 'DELIVERED'
   return 'DELIVERED'

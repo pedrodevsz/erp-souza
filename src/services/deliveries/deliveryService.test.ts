@@ -7,8 +7,8 @@ test('builder de query envia busca e datas, mas não filtros removidos', () => {
   assert.equal(query, '?search=PEDRO&dateFrom=2026-09-01&dateTo=2026-09-30')
 })
 
-test('builder ignora parâmetros legados de status, cidade e motorista', () => {
-  const query = buildDeliveryQuery({ search: 'PEDRO', status: 'PENDING', city: 'PALMAS', driverName: 'JOAO' } as never)
+test('builder ignora parâmetros legados de status e motorista', () => {
+  const query = buildDeliveryQuery({ search: 'PEDRO', status: 'PENDING', driverName: 'JOAO' } as never)
   assert.equal(query, '?search=PEDRO')
 })
 

@@ -1,7 +1,7 @@
 import mongoose, { type ClientSession } from 'mongoose'
 
 import { connectToDatabase } from '@/server/db/mongodb'
-import { requireCurrentUser } from '@/server/auth/current-user'
+import { requireStoreContext, type StoreContext } from '@/server/auth/store-context'
 import { AppError } from '@/server/errors/app-error'
 import { DeliveryModel, type DeliveryDocumentShape } from '@/server/models/deliveries/deliveries.model'
 import { CustomerModel } from '@/server/models/customers/customers.model'
@@ -35,15 +35,17 @@ function normalizeOptionalText(value: string | undefined) {
   return normalizeTextInput(value)
 }
 
-async function syncSaleDeliveryStatus(delivery: Pick<DeliveryDocumentShape, 'saleId' | 'status'>, userId: string) {
+async function syncSaleDeliveryStatus(context: StoreContext, delivery: Pick<DeliveryDocumentShape, 'saleId' | 'status'>, session?: ClientSession) {
   await SaleModel.updateOne(
-    { _id: delivery.saleId, userId },
+    { _id: delivery.saleId, storeId: context.storeId },
     {
       $set: {
         isDelivery: true,
-        deliveryStatus: delivery.status === 'DELIVERED' ? 'DELIVERED' : 'PENDING',
+        deliveryStatus: delivery.status === 'DELIVERED' || delivery.status === 'CANCELLED' ? delivery.status : 'PENDING',
+        updatedBy: context.actorId,
       },
-    }
+    },
+    { session: session ?? undefined }
   )
 }
 
@@ -92,6 +94,7 @@ function toDeliveryDTO(delivery: DeliveryDocumentShape): Delivery {
 }
 
 function buildDeliveryFromSale(
+  context: StoreContext,
   sale: SaleDocumentShape,
   customer: { phone?: string; addresses?: Array<{ street?: string; number?: string; complement?: string; district?: string }> } | null
 ) {
@@ -109,7 +112,10 @@ function buildDeliveryFromSale(
   }))
 
   return {
+    storeId: context.storeId,
     userId: sale.userId,
+    createdBy: context.actorId,
+    updatedBy: context.actorId,
     saleId: String(sale._id),
     saleNumber: createSaleReference(String(sale._id)),
     customerId: sale.customerId,
@@ -130,11 +136,11 @@ function buildDeliveryFromSale(
   }
 }
 
-async function syncDeliveriesFromSales(userId: string, session?: ClientSession) {
-  const deliveries = await DeliveryModel.find({ userId }, { saleId: 1 }).session(session ?? null).lean<Array<{ saleId: string }>>()
+async function syncDeliveriesFromSales(context: StoreContext, session?: ClientSession) {
+  const deliveries = await DeliveryModel.find({ storeId: context.storeId }, { saleId: 1 }).session(session ?? null).lean<Array<{ saleId: string }>>()
   const existingSaleIds = new Set(deliveries.map((delivery) => delivery.saleId))
 
-  const sales = await SaleModel.find({ userId, deliveryStatus: 'PENDING' }).sort({ createdAt: -1 }).lean<SaleDocumentShape[]>()
+  const sales = await SaleModel.find({ storeId: context.storeId, status: 'ACTIVE', deliveryStatus: 'PENDING' }).sort({ createdAt: -1 }).lean<SaleDocumentShape[]>()
   const missingSales = sales.filter((sale) => !existingSaleIds.has(String(sale._id)))
 
   if (missingSales.length === 0) {
@@ -142,34 +148,25 @@ async function syncDeliveriesFromSales(userId: string, session?: ClientSession) 
   }
 
   const customerIds = Array.from(new Set(missingSales.map((sale) => sale.customerId)))
-  const customers = await CustomerModel.find({ userId, _id: { $in: customerIds } })
+  const customers = await CustomerModel.find({ storeId: context.storeId, _id: { $in: customerIds } })
     .lean<Array<{ _id: mongoose.Types.ObjectId; phone?: string; addresses?: Array<{ street?: string; number?: string; complement?: string; district?: string }> }>>()
 
   const customerMap = new Map(customers.map((customer) => [String(customer._id), customer]))
-  const docs = missingSales.map((sale) => buildDeliveryFromSale(sale, customerMap.get(sale.customerId) ?? null))
-
-  await DeliveryModel.updateMany(
-    {
-      saleId: { $in: docs.map((doc) => doc.saleId) },
-      $or: [{ userId: { $exists: false } }, { userId: null }],
-    },
-    { $set: { userId } },
-    { session: session ?? undefined }
-  )
+  const docs = missingSales.map((sale) => buildDeliveryFromSale(context, sale, customerMap.get(sale.customerId) ?? null))
 
   await DeliveryModel.insertMany(docs, { ordered: false, session: session ?? null })
 }
 
-async function ensureDeliveriesSeeded(userId: string, session?: ClientSession) {
-  await syncDeliveriesFromSales(userId, session)
+async function ensureDeliveriesSeeded(context: StoreContext, session?: ClientSession) {
+  await syncDeliveriesFromSales(context, session)
 }
 
-async function findDeliveryOrThrow(id: string, userId: string, session?: ClientSession) {
+async function findDeliveryOrThrow(id: string, context: StoreContext, session?: ClientSession) {
   const parsed = deliveryIdParamSchema.parse({ id })
-  let delivery = await DeliveryModel.findOne({ _id: parsed.id, userId }).session(session ?? null)
+  let delivery = await DeliveryModel.findOne({ _id: parsed.id, storeId: context.storeId }).session(session ?? null)
   if (!delivery) {
-    await ensureDeliveriesSeeded(userId, session)
-    delivery = await DeliveryModel.findOne({ _id: parsed.id, userId }).session(session ?? null)
+    await ensureDeliveriesSeeded(context, session)
+    delivery = await DeliveryModel.findOne({ _id: parsed.id, storeId: context.storeId }).session(session ?? null)
   }
 
   if (!delivery) {
@@ -218,11 +215,11 @@ function matchesSearch(delivery: Delivery, search?: string) {
 export const DeliveryService = {
   async getAll(query?: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const parsed = deliveryListQuerySchema.parse(query ?? {})
-    await ensureDeliveriesSeeded(currentUser.id)
+    await ensureDeliveriesSeeded(context)
 
-    const rawDeliveries = await DeliveryModel.find({ userId: currentUser.id }).sort({ createdAt: -1 }).lean<DeliveryDocumentShape[]>()
+    const rawDeliveries = await DeliveryModel.find({ storeId: context.storeId }).sort({ createdAt: -1 }).lean<DeliveryDocumentShape[]>()
     const deliveries = rawDeliveries.map(toDeliveryDTO)
 
     return deliveries
@@ -243,8 +240,8 @@ export const DeliveryService = {
 
   async getById(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    const delivery = await findDeliveryOrThrow(id, currentUser.id)
+    const context = await requireStoreContext()
+    const delivery = await findDeliveryOrThrow(id, context)
     return {
       ...toDeliveryDTO(delivery),
       status: normalizeEffectiveStatus(toDeliveryDTO(delivery)),
@@ -253,9 +250,9 @@ export const DeliveryService = {
 
   async update(id: string, data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const parsed = deliveryUpdateSchema.parse(data)
-    const delivery = await findDeliveryOrThrow(id, currentUser.id)
+    const delivery = await findDeliveryOrThrow(id, context)
     ensureNotCancelled(delivery)
 
     if (parsed.status && !['PENDING', 'PARTIALLY_DELIVERED', 'LATE'].includes(parsed.status)) {
@@ -267,8 +264,9 @@ export const DeliveryService = {
     delivery.status = normalizeEffectiveStatus(toDeliveryDTO(delivery))
     delivery.deliveredAt = delivery.status === 'DELIVERED' ? delivery.deliveredAt || nowISO() : undefined
     delivery.updatedAt = new Date()
+    delivery.updatedBy = new mongoose.Types.ObjectId(context.actorId)
     await delivery.save()
-    await syncSaleDeliveryStatus(delivery, currentUser.id)
+    await syncSaleDeliveryStatus(context, delivery)
     return {
       ...toDeliveryDTO(delivery),
       status: normalizeEffectiveStatus(toDeliveryDTO(delivery)),
@@ -278,9 +276,9 @@ export const DeliveryService = {
 
   async markItemAsDelivered(deliveryId: string, itemId: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const parsed = deliveryItemIdParamSchema.parse({ id: deliveryId, itemId })
-    const delivery = await findDeliveryOrThrow(parsed.id, currentUser.id)
+    const delivery = await findDeliveryOrThrow(parsed.id, context)
     ensureNotCancelled(delivery)
 
     const item = delivery.items.find((entry) => entry.id === parsed.itemId)
@@ -291,8 +289,9 @@ export const DeliveryService = {
     delivery.status = normalizeEffectiveStatus(toDeliveryDTO(delivery))
     delivery.deliveredAt = delivery.status === 'DELIVERED' ? delivery.deliveredAt || nowISO() : undefined
     delivery.updatedAt = new Date()
+    delivery.updatedBy = new mongoose.Types.ObjectId(context.actorId)
     await delivery.save()
-    await syncSaleDeliveryStatus(delivery, currentUser.id)
+    await syncSaleDeliveryStatus(context, delivery)
 
     const dto = toDeliveryDTO(delivery)
     return { ...dto, status: normalizeEffectiveStatus(dto) }
@@ -300,9 +299,9 @@ export const DeliveryService = {
 
   async markItemAsPending(deliveryId: string, itemId: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const parsed = deliveryItemIdParamSchema.parse({ id: deliveryId, itemId })
-    const delivery = await findDeliveryOrThrow(parsed.id, currentUser.id)
+    const delivery = await findDeliveryOrThrow(parsed.id, context)
     ensureNotCancelled(delivery)
 
     const item = delivery.items.find((entry) => entry.id === parsed.itemId)
@@ -313,8 +312,9 @@ export const DeliveryService = {
     delivery.status = normalizeEffectiveStatus(toDeliveryDTO(delivery))
     delivery.deliveredAt = undefined
     delivery.updatedAt = new Date()
+    delivery.updatedBy = new mongoose.Types.ObjectId(context.actorId)
     await delivery.save()
-    await syncSaleDeliveryStatus(delivery, currentUser.id)
+    await syncSaleDeliveryStatus(context, delivery)
 
     const dto = toDeliveryDTO(delivery)
     return { ...dto, status: normalizeEffectiveStatus(dto) }
@@ -322,12 +322,12 @@ export const DeliveryService = {
 
   async completeDelivery(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const session = await mongoose.startSession()
     try {
       let completed: ReturnType<typeof toDeliveryDTO> | undefined
       await session.withTransaction(async () => {
-        const delivery = await findDeliveryOrThrow(id, currentUser.id, session)
+        const delivery = await findDeliveryOrThrow(id, context, session)
         ensureNotCancelled(delivery)
 
         if ((delivery.items?.length ?? 0) === 0) {
@@ -339,8 +339,9 @@ export const DeliveryService = {
         delivery.status = 'DELIVERED'
         delivery.deliveredAt = deliveredAt
         delivery.updatedAt = new Date()
+        delivery.updatedBy = new mongoose.Types.ObjectId(context.actorId)
         await delivery.save({ session })
-        await syncSaleDeliveryStatus(delivery, currentUser.id)
+        await syncSaleDeliveryStatus(context, delivery, session)
         completed = {
           ...toDeliveryDTO(delivery),
           status: 'DELIVERED' as DeliveryStatus,
@@ -360,13 +361,14 @@ export const DeliveryService = {
 
   async cancelDelivery(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    const delivery = await findDeliveryOrThrow(id, currentUser.id)
+    const context = await requireStoreContext()
+    const delivery = await findDeliveryOrThrow(id, context)
     delivery.status = 'CANCELLED'
     delivery.deliveredAt = undefined
     delivery.updatedAt = new Date()
+    delivery.updatedBy = new mongoose.Types.ObjectId(context.actorId)
     await delivery.save()
-    await syncSaleDeliveryStatus(delivery, currentUser.id)
+    await syncSaleDeliveryStatus(context, delivery)
     return {
       ...toDeliveryDTO(delivery),
       status: 'CANCELLED' as DeliveryStatus,

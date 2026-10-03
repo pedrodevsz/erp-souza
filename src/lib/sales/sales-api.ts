@@ -63,6 +63,7 @@ export type SaleHistoryEntry = {
 
 export type Sale = SaleInput & {
   id: string
+  revision: number
   deliveryStatus: SaleDeliveryStatus
   paymentStatus: SalePaymentStatus
   paidAmount: number
@@ -120,7 +121,7 @@ export async function createSale(data: SaleInput) {
   return request<Sale>('/api/sales', { method: 'POST', body: JSON.stringify(data) })
 }
 
-export async function updateSale(id: string, data: Partial<SaleInput>) {
+export async function updateSale(id: string, data: Partial<SaleInput> & { expectedRevision: number }) {
   return request<Sale>(`/api/sales/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }
 

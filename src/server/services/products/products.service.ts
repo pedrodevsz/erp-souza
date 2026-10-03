@@ -2,7 +2,7 @@ import mongoose from 'mongoose'
 
 import { connectToDatabase } from '@/server/db/mongodb'
 import { AppError } from '@/server/errors/app-error'
-import { requireCurrentUser } from '@/server/auth/current-user'
+import { requireStoreContext } from '@/server/auth/store-context'
 import { InventoryModel } from '@/server/models/inventories/inventories.model'
 import { ProductModel, type ProductDTO, type ProductDocumentShape } from '@/server/models/products/products.model'
 import {
@@ -30,12 +30,12 @@ function toProductDTO(product: ProductDocumentShape): ProductDTO {
   }
 }
 
-async function findProductByIdOrThrow(id: string, userId: string, session?: mongoose.ClientSession) {
+async function findProductByIdOrThrow(id: string, storeId: string, session?: mongoose.ClientSession) {
   if (!mongoose.isValidObjectId(id)) {
     throw new AppError('ID do produto inválido.', 400)
   }
 
-  const product = await ProductModel.findOne({ _id: id, userId }).session(session ?? null)
+  const product = await ProductModel.findOne({ _id: id, storeId }).session(session ?? null)
   if (!product) {
     throw new AppError('Produto não encontrado.', 404)
   }
@@ -43,10 +43,10 @@ async function findProductByIdOrThrow(id: string, userId: string, session?: mong
   return product
 }
 
-async function ensureUniqueProduct(input: CreateProductInput, userId: string) {
+async function ensureUniqueProduct(input: CreateProductInput, storeId: string) {
   const normalized = normalizeProductInput(input)
   const duplicate = await ProductModel.findOne({
-    userId,
+    storeId,
     name: normalized.name,
     unit: normalized.unit,
     brand: normalized.brand,
@@ -59,11 +59,11 @@ async function ensureUniqueProduct(input: CreateProductInput, userId: string) {
   return normalized
 }
 
-async function ensureUniqueProductUpdate(id: string, input: CreateProductInput, userId: string) {
+async function ensureUniqueProductUpdate(id: string, input: CreateProductInput, storeId: string) {
   const normalized = normalizeProductInput(input)
   const duplicate = await ProductModel.findOne({
     _id: { $ne: id },
-    userId,
+    storeId,
     name: normalized.name,
     unit: normalized.unit,
     brand: normalized.brand,
@@ -79,10 +79,10 @@ async function ensureUniqueProductUpdate(id: string, input: CreateProductInput, 
 export const ProductService = {
   async list(search?: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
 
     const parsed = productListQuerySchema.parse({ search })
-    const filter: Record<string, unknown> = { userId: currentUser.id }
+    const filter: Record<string, unknown> = { storeId: context.storeId }
     if (parsed.search) {
       filter.$or = [
         { name: { $regex: escapeRegExp(parsed.search), $options: 'i' } },
@@ -98,14 +98,17 @@ export const ProductService = {
 
   async create(data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
 
     const parsed = productCreateSchema.parse(data)
-    const normalized = await ensureUniqueProduct(parsed, currentUser.id)
+    const normalized = await ensureUniqueProduct(parsed, context.storeId)
     const product = buildProductLabel(normalized.name, normalized.unit, normalized.brand)
 
     const created = await ProductModel.create({
-      userId: currentUser.id,
+      storeId: context.storeId,
+      userId: context.actorId,
+      createdBy: context.actorId,
+      updatedBy: context.actorId,
       ...normalized,
       product,
     })
@@ -115,20 +118,20 @@ export const ProductService = {
 
   async getById(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    return toProductDTO(await findProductByIdOrThrow(id, currentUser.id))
+    const context = await requireStoreContext()
+    return toProductDTO(await findProductByIdOrThrow(id, context.storeId))
   },
 
   async update(id: string, data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const session = await mongoose.startSession()
 
     try {
       let updatedProduct: ProductDocumentShape | null = null
 
       await session.withTransaction(async () => {
-        const product = await findProductByIdOrThrow(id, currentUser.id, session)
+        const product = await findProductByIdOrThrow(id, context.storeId, session)
         const parsed = productUpdateSchema.parse(data)
 
         const nextName = parsed.name ?? product.name
@@ -141,11 +144,11 @@ export const ProductService = {
             unit: nextUnit,
             brand: nextBrand,
           },
-          currentUser.id
+          context.storeId
         )
 
         const inventory = await InventoryModel.findOne({
-          userId: currentUser.id,
+          storeId: context.storeId,
           $or: [
             { productId: String(product._id) },
             {
@@ -157,7 +160,7 @@ export const ProductService = {
         }).session(session)
         if (inventory) {
           const duplicateInventory = await InventoryModel.findOne({
-            userId: currentUser.id,
+            storeId: context.storeId,
             _id: { $ne: inventory._id },
             productName: normalized.name,
             unit: normalized.unit,
@@ -180,6 +183,8 @@ export const ProductService = {
         product.unit = normalized.unit
         product.brand = normalized.brand
         product.product = buildProductLabel(normalized.name, normalized.unit, normalized.brand)
+        product.updatedBy = new mongoose.Types.ObjectId(context.actorId)
+        if (inventory) inventory.updatedBy = new mongoose.Types.ObjectId(context.actorId)
 
         updatedProduct = await product.save({ session })
         if (inventory) {
@@ -199,8 +204,8 @@ export const ProductService = {
 
   async remove(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    const product = await findProductByIdOrThrow(id, currentUser.id)
+    const context = await requireStoreContext()
+    const product = await findProductByIdOrThrow(id, context.storeId)
     await product.deleteOne()
     return { id: String(product._id), deleted: true }
   },

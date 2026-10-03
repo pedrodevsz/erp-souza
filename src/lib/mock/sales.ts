@@ -151,6 +151,7 @@ function buildSale(index: number): Sale {
 
   return {
     id: createId(index),
+    revision: 0,
     customerId: customer.id,
     customerName: customer.name,
     sellerId: seller.id,

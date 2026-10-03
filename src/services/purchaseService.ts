@@ -6,7 +6,7 @@ function normalizePurchase(purchase: Purchase | null | undefined): Purchase {
     return {
         id: purchase?.id ?? '',
         supplier: purchase?.supplier ?? '',
-        purchaseDate: purchase?.purchaseDate ?? new Date().toISOString(),
+        purchaseDate: purchase?.purchaseDate ?? '',
         expectedDelivery: purchase?.expectedDelivery ?? null,
         paymentCondition: normalizePurchasePaymentCondition(purchase?.paymentCondition),
         paymentMethod: purchase?.paymentMethod ?? null,

@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 
 import { connectToDatabase } from '@/server/db/mongodb'
-import { requireCurrentUser } from '@/server/auth/current-user'
+import { requireStoreContext } from '@/server/auth/store-context'
 import { AppError } from '@/server/errors/app-error'
 import { SupplierModel, type SupplierDTO, type SupplierDocumentShape } from '@/server/models/suppliers/suppliers.model'
 import {
@@ -28,12 +28,12 @@ function toSupplierDTO(supplier: SupplierDocumentShape): SupplierDTO {
   }
 }
 
-async function findSupplierByIdOrThrow(id: string, userId: string) {
+async function findSupplierByIdOrThrow(id: string, storeId: string) {
   if (!mongoose.isValidObjectId(id)) {
     throw new AppError('ID do fornecedor inválido.', 400)
   }
 
-  const supplier = await SupplierModel.findOne({ _id: id, userId })
+  const supplier = await SupplierModel.findOne({ _id: id, storeId })
 
   if (!supplier) {
     throw new AppError('Fornecedor não encontrado.', 404)
@@ -42,10 +42,10 @@ async function findSupplierByIdOrThrow(id: string, userId: string) {
   return supplier
 }
 
-async function ensureSupplierNameIsUnique(name: string, userId: string) {
+async function ensureSupplierNameIsUnique(name: string, storeId: string) {
   const normalizedName = normalizeName(name)
   const duplicate = await SupplierModel.findOne({
-    userId,
+    storeId,
     name: { $regex: `^${escapeRegExp(normalizedName)}$`, $options: 'i' },
   }).lean<SupplierDocumentShape | null>()
 
@@ -59,10 +59,10 @@ async function ensureSupplierNameIsUnique(name: string, userId: string) {
 export const SupplierService = {
   async list(search?: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
 
     const parsed = supplierListQuerySchema.parse({ search })
-    const filter: Record<string, unknown> = { userId: currentUser.id }
+    const filter: Record<string, unknown> = { storeId: context.storeId }
     if (parsed.search) {
       filter.name = { $regex: escapeRegExp(parsed.search), $options: 'i' }
     }
@@ -73,25 +73,25 @@ export const SupplierService = {
 
   async create(data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
 
     const parsed: CreateSupplierInput = supplierCreateSchema.parse(data)
-    const name = await ensureSupplierNameIsUnique(parsed.name, currentUser.id)
+    const name = await ensureSupplierNameIsUnique(parsed.name, context.storeId)
 
-    const created = await SupplierModel.create({ userId: currentUser.id, name })
+    const created = await SupplierModel.create({ storeId: context.storeId, userId: context.actorId, createdBy: context.actorId, updatedBy: context.actorId, name })
     return toSupplierDTO(created)
   },
 
   async getById(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    return toSupplierDTO(await findSupplierByIdOrThrow(id, currentUser.id))
+    const context = await requireStoreContext()
+    return toSupplierDTO(await findSupplierByIdOrThrow(id, context.storeId))
   },
 
   async remove(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    const supplier = await findSupplierByIdOrThrow(id, currentUser.id)
+    const context = await requireStoreContext()
+    const supplier = await findSupplierByIdOrThrow(id, context.storeId)
     await supplier.deleteOne()
     return { id: String(supplier._id), deleted: true }
   },

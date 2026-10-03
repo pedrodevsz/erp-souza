@@ -2,9 +2,13 @@ import mongoose from 'mongoose'
 import { z } from 'zod'
 
 import { connectToDatabase } from '@/server/db/mongodb'
-import { requireCurrentUser } from '@/server/auth/current-user'
+import { requireStoreContext, type StoreContext } from '@/server/auth/store-context'
 import { AppError } from '@/server/errors/app-error'
 import { SaleModel, type SaleDocumentShape } from '@/server/models/sales/sales.model'
+import { DeliveryModel } from '@/server/models/deliveries/deliveries.model'
+import { CustomerModel } from '@/server/models/customers/customers.model'
+import { EmployeeModel } from '@/server/models/employees/employees.model'
+import { InventoryModel } from '@/server/models/inventories/inventories.model'
 import { saleCreateSchema, saleIdParamSchema, saleListQuerySchema, saleUpdateSchema, type UpdateSaleInput } from '@/server/schemas/sales/sales.schema'
 import {
   buildSaleInstallmentId,
@@ -24,6 +28,8 @@ import {
 } from '@/lib/sales'
 import { buildProductLabel } from '@/lib/products'
 import { InventoryService } from '@/server/services/inventories/inventories.service'
+import { ProductReservationService } from '@/server/services/product-reservations/product-reservations.service'
+import { isBusinessDate, normalizeBusinessDate } from '@/lib/business-date'
 import { normalizeTextInput } from '@/lib/text'
 
 function escapeRegExp(value: string) {
@@ -32,6 +38,13 @@ function escapeRegExp(value: string) {
 
 function nowISO() {
   return new Date().toISOString()
+}
+
+function concurrentSaleChange(error: unknown): never {
+  if (error instanceof mongoose.Error.VersionError) {
+    throw new AppError('A venda foi alterada por outra operação. Recarregue os dados e tente novamente.', 409)
+  }
+  throw error
 }
 
 function normalizeText(value: string | null | undefined) {
@@ -158,6 +171,10 @@ function validateSalePayments(paymentConditionType: string, payments: Array<{ am
     return
   }
 
+  if (amountPaid > total) {
+    throw new AppError('O total da venda não pode ser menor que o valor já pago.', 400)
+  }
+
   if (Number.isFinite(initialPayment ?? NaN) && normalizedInitialPayment > total) {
     throw new AppError('A primeira parcela não pode ser maior que o total da venda.', 400)
   }
@@ -167,10 +184,10 @@ function validateSalePayments(paymentConditionType: string, payments: Array<{ am
   }
 }
 
-function normalizeSaleDeliveryState(sale: { isDelivery?: boolean | null; deliveryStatus?: string | null; status?: string | null }) {
-  const hasStoredStatus = sale.deliveryStatus !== undefined || sale.status !== undefined
+function normalizeSaleDeliveryState(sale: { isDelivery?: boolean | null; deliveryStatus?: string | null }) {
+  const hasStoredStatus = sale.deliveryStatus !== undefined
   if (hasStoredStatus) {
-    const deliveryStatus = normalizeSaleDeliveryStatus(sale.deliveryStatus ?? sale.status)
+    const deliveryStatus = normalizeSaleDeliveryStatus(sale.deliveryStatus)
     return {
       isDelivery: typeof sale.isDelivery === 'boolean' ? sale.isDelivery : deliveryStatus === 'PENDING',
       deliveryStatus,
@@ -184,94 +201,8 @@ function normalizeSaleDeliveryState(sale: { isDelivery?: boolean | null; deliver
   }
 }
 
-async function migrateLegacySaleDeliveryFields(userId: string) {
-  const legacySales = await SaleModel.find({
-    userId,
-    $or: [
-      { isDelivery: { $exists: false } },
-      { isDelivery: null },
-      { deliveryStatus: { $exists: false } },
-      { status: { $exists: true } },
-    ],
-  })
-    .select({ isDelivery: 1, deliveryStatus: 1, status: 1 })
-    .lean<Array<{ _id: mongoose.Types.ObjectId; isDelivery?: boolean | null; deliveryStatus?: string | null; status?: string | null }>>()
-
-  if (legacySales.length === 0) {
-    return
-  }
-
-  await Promise.all(
-    legacySales.map(async (sale) => {
-      const normalized = normalizeSaleDeliveryState(sale)
-      await SaleModel.updateOne(
-        { _id: sale._id },
-        {
-          $set: {
-            isDelivery: normalized.isDelivery,
-            deliveryStatus: normalized.deliveryStatus,
-          },
-          $unset: { status: '' },
-        }
-      )
-    })
-  )
-}
-
-async function migrateLegacySalePaymentConditionFields(userId: string) {
-  const legacySales = await SaleModel.find({
-    userId,
-    $or: [
-      { paymentCondition: { $type: 'string' } },
-      { 'paymentCondition.type': { $exists: false } },
-      { payments: { $exists: false } },
-      { paymentCondition: null },
-    ],
-  })
-    .select({ paymentCondition: 1, paymentMethod: 1, payments: 1, initialPayment: 1, saleDate: 1, total: 1 })
-    .lean<Array<{ _id: mongoose.Types.ObjectId; paymentCondition?: unknown; paymentMethod?: string; payments?: Array<{ amount?: number; date?: string; paymentMethod?: string }>; initialPayment?: number; saleDate?: string; total?: number }>>()
-
-  if (legacySales.length === 0) {
-    return
-  }
-
-  await Promise.all(
-    legacySales.map(async (sale) => {
-      const normalizedCondition = prepareSalePaymentCondition(sale.paymentCondition)
-      const payments = buildSalePayments(
-        {
-          paymentCondition: normalizedCondition,
-          paymentMethod: sale.paymentMethod,
-          initialPayment: sale.initialPayment,
-          payments: sale.payments,
-          saleDate: sale.saleDate,
-          total: sale.total ?? 0,
-        },
-        sale.total ?? 0,
-        String(sale._id)
-      )
-      const paidAmount = getSalePaidAmount({ payments, paymentCondition: normalizedCondition, total: sale.total ?? 0 })
-      const remainingAmount = getSaleRemainingAmount(sale.total ?? 0, paidAmount)
-      await SaleModel.updateOne(
-        { _id: sale._id },
-        {
-          $set: {
-            paymentCondition: normalizedCondition,
-            paymentMethod: normalizedCondition.type === 'A_VISTA' ? normalizeTextInput(sale.paymentMethod) : normalizeTextInput(payments[0]?.paymentMethod ?? sale.paymentMethod ?? ''),
-            payments,
-            paymentStatus: getSalePaymentStatus(sale.total ?? 0, paidAmount),
-            paidAmount,
-            remainingAmount,
-            initialPayment: payments[0]?.amount ?? 0,
-          },
-        }
-      )
-    })
-  )
-}
-
 function toSaleDTO(sale: SaleDocumentShape) {
-  const normalizedDelivery = normalizeSaleDeliveryState(sale as unknown as { isDelivery?: boolean | null; deliveryStatus?: string | null; status?: string | null })
+  const normalizedDelivery = normalizeSaleDeliveryState(sale as unknown as { isDelivery?: boolean | null; deliveryStatus?: string | null })
   const paymentCondition = prepareSalePaymentCondition(sale.paymentCondition as never)
   const payments = buildSalePayments(
     {
@@ -291,6 +222,8 @@ function toSaleDTO(sale: SaleDocumentShape) {
 
   return {
     id: String(sale._id),
+    revision: sale.__v ?? 0,
+    status: sale.status,
     customerId: sale.customerId,
     customerName: sale.customerName,
     sellerId: sale.sellerId,
@@ -345,9 +278,9 @@ function toHistoryDTO(sale: SaleDocumentShape) {
 }
 
 function normalizeSaleItems(items: UpdateSaleInput['items'] | undefined) {
-  return (items ?? []).map((item) => ({
+  const normalized = (items ?? []).map((item) => ({
     ...item,
-    productId: normalizeText(item.productId),
+    productId: item.productId.trim(),
     productName: normalizeText(item.productName),
     brand: normalizeText(item.brand),
     product: normalizeText(item.product) || buildProductLabel(item.productName, item.unit, item.brand ?? ''),
@@ -359,6 +292,61 @@ function normalizeSaleItems(items: UpdateSaleInput['items'] | undefined) {
     discount: toFiniteNumber(item.discount, 0),
     subtotal: roundCurrency(toFiniteNumber(item.quantity, 0) * toFiniteNumber(item.unitPrice, 0) - toFiniteNumber(item.discount, 0)),
   }))
+  const grouped = new Map<string, (typeof normalized)[number]>()
+  for (const item of normalized) {
+    const key = `${item.productId}|${item.sku}`
+    const existing = grouped.get(key)
+    if (!existing) {
+      grouped.set(key, item)
+      continue
+    }
+    if (existing.unitPrice !== item.unitPrice || existing.unit !== item.unit) {
+      throw new AppError('Itens repetidos do mesmo produto precisam usar o mesmo preço e unidade.', 400)
+    }
+    existing.quantity += item.quantity
+    existing.discount = roundCurrency(existing.discount + item.discount)
+    existing.subtotal = roundCurrency(existing.quantity * existing.unitPrice - existing.discount)
+  }
+  return [...grouped.values()]
+}
+
+async function resolveSaleItems(context: StoreContext, input: NonNullable<UpdateSaleInput['items']>, session: mongoose.ClientSession) {
+  const items = []
+  for (const item of input) {
+    const selectors: Array<Record<string, unknown>> = [{ productId: item.productId }]
+    if (mongoose.isValidObjectId(item.productId)) selectors.unshift({ _id: item.productId })
+    const inventory = await InventoryModel.findOne({ storeId: context.storeId, $or: selectors }).session(session)
+    if (!inventory) throw new AppError('Produto não encontrado.', 404)
+    items.push({
+      ...item,
+      productId: inventory.productId,
+      productName: inventory.productName,
+      brand: inventory.brand ?? '',
+      product: inventory.product,
+      sku: inventory.sku,
+      unit: inventory.unit,
+      availableStock: inventory.availableStock,
+      unitPrice: inventory.salePrice,
+    })
+  }
+
+  return normalizeSaleItems(items)
+}
+
+async function resolveSaleRelations(
+  context: StoreContext,
+  input: { customerId: string; sellerId: string; items: NonNullable<UpdateSaleInput['items']> },
+  session: mongoose.ClientSession
+) {
+  if (!mongoose.isValidObjectId(input.customerId) || !mongoose.isValidObjectId(input.sellerId)) {
+    throw new AppError('Cliente ou vendedor não encontrado.', 404)
+  }
+  const customer = await CustomerModel.findOne({ _id: input.customerId, storeId: context.storeId }).session(session)
+  const seller = await EmployeeModel.findOne({ _id: input.sellerId, storeId: context.storeId, active: true }).session(session)
+  if (!customer || !seller) throw new AppError('Cliente ou vendedor não encontrado.', 404)
+  const items = await resolveSaleItems(context, input.items, session)
+
+  return { customerId: String(customer._id), customerName: customer.name, sellerId: String(seller._id), sellerName: seller.name, items }
 }
 
 function normalizeSaleItemsFromDocument(items: SaleDocumentShape['items']) {
@@ -384,14 +372,14 @@ function buildTotals(items: ReturnType<typeof normalizeSaleItems>, discount = 0,
   return { subtotal, total }
 }
 
-async function findSaleOrThrow(id: string, userId: string, session?: mongoose.ClientSession) {
+async function findSaleOrThrow(id: string, storeId: string, session?: mongoose.ClientSession) {
   const parsed = saleIdParamSchema.parse({ id })
 
   if (!mongoose.isValidObjectId(parsed.id)) {
     throw new AppError('ID da venda inválido.', 400)
   }
 
-  const sale = await SaleModel.findOne({ _id: parsed.id, userId }).session(session ?? null)
+  const sale = await SaleModel.findOne({ _id: parsed.id, storeId }).session(session ?? null)
   if (!sale) {
     throw new AppError('Venda não encontrada.', 404)
   }
@@ -400,6 +388,7 @@ async function findSaleOrThrow(id: string, userId: string, session?: mongoose.Cl
 }
 
 function appendHistory(
+  context: StoreContext,
   sale: SaleDocumentShape,
   action: 'created' | 'updated' | 'delivered' | 'cancelled' | 'payment_added',
   description: string
@@ -407,6 +396,7 @@ function appendHistory(
   const saleId = String(sale._id)
   sale.set('history', [
     {
+      actorId: context.actorId,
       id: `${saleId}-history-${sale.history.length + 1}`,
       saleId,
       action,
@@ -432,6 +422,55 @@ function toInventorySyncItems(items: ReturnType<typeof normalizeSaleItems>) {
   }))
 }
 
+function deliveryItemKey(item: { productId: string; sku: string }) {
+  return `${normalizeText(item.productId)}|${normalizeText(item.sku)}`
+}
+
+function deliveryRelevantItemsEqual(
+  previousItems: ReturnType<typeof normalizeSaleItems>,
+  nextItems: ReturnType<typeof normalizeSaleItems>
+) {
+  if (previousItems.length !== nextItems.length) return false
+  const previous = new Map(previousItems.map((item) => [deliveryItemKey(item), item]))
+  return nextItems.every((item) => {
+    const old = previous.get(deliveryItemKey(item))
+    return Boolean(old) && old?.productName === item.productName && old.unit === item.unit && old.quantity === item.quantity
+  })
+}
+
+async function syncExistingDeliverySnapshot(
+  context: StoreContext,
+  sale: SaleDocumentShape,
+  previousItems: ReturnType<typeof normalizeSaleItems>,
+  nextItems: ReturnType<typeof normalizeSaleItems>,
+  session: mongoose.ClientSession
+) {
+  const delivery = await DeliveryModel.findOne({ storeId: context.storeId, saleId: String(sale._id) }).session(session)
+  if (!delivery) return
+
+  if (!sale.isDelivery) {
+    throw new AppError('Venda com entrega existente não pode remover a entrega automaticamente; ajuste a entrega antes.', 409)
+  }
+
+  if (deliveryRelevantItemsEqual(previousItems, nextItems)) return
+  if (delivery.items.some((item) => item.delivered)) {
+    throw new AppError('Itens da venda não podem ser alterados após o início da entrega.', 409)
+  }
+
+  delivery.items = nextItems.map((item) => ({
+    id: `${String(sale._id)}-item-${item.sku}`,
+    productId: item.productId,
+    productName: item.productName,
+    sku: item.sku,
+    quantity: item.quantity,
+    unit: item.unit,
+    delivered: false,
+  })) as never
+  delivery.updatedBy = new mongoose.Types.ObjectId(context.actorId)
+  delivery.updatedAt = new Date()
+  await delivery.save({ session })
+}
+
 function buildPaymentConditionSearchClauses(search: string) {
   const normalizedSearch = search.trim()
   if (!normalizedSearch) {
@@ -451,12 +490,10 @@ function buildPaymentConditionSearchClauses(search: string) {
 export const SalesService = {
   async list(search?: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await migrateLegacySaleDeliveryFields(currentUser.id)
-    await migrateLegacySalePaymentConditionFields(currentUser.id)
+    const context = await requireStoreContext()
 
     const parsed = saleListQuerySchema.parse({ search })
-    const filter: Record<string, unknown> = { userId: currentUser.id }
+    const filter: Record<string, unknown> = { storeId: context.storeId }
 
     if (parsed.search) {
       filter.$or = [
@@ -482,21 +519,20 @@ export const SalesService = {
 
   async getById(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await migrateLegacySaleDeliveryFields(currentUser.id)
-    await migrateLegacySalePaymentConditionFields(currentUser.id)
-    return toSaleDTO(await findSaleOrThrow(id, currentUser.id))
+    const context = await requireStoreContext()
+    return toSaleDTO(await findSaleOrThrow(id, context.storeId))
   },
 
   async create(data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const session = await mongoose.startSession()
     try {
       let createdDTO: ReturnType<typeof toSaleDTO> | undefined
       await session.withTransaction(async () => {
         const parsed = saleCreateSchema.parse(data)
-        const items = normalizeSaleItems(parsed.items)
+        const resolved = await resolveSaleRelations(context, parsed, session)
+        const items = resolved.items
         const { subtotal, total } = buildTotals(items, parsed.discount ?? 0, parsed.shipping ?? 0, parsed.otherCosts ?? 0)
         const nextDeliveryState = normalizeSaleDeliveryState(parsed)
         const paymentCondition = prepareSalePaymentCondition(parsed.paymentCondition)
@@ -507,11 +543,15 @@ export const SalesService = {
         const paymentStatus = getSalePaymentStatus(total, paidAmount)
 
         const created = new SaleModel({
-          userId: currentUser.id,
-          customerId: parsed.customerId,
-          customerName: parsed.customerName,
-          sellerId: parsed.sellerId,
-          sellerName: parsed.sellerName,
+          storeId: context.storeId,
+          userId: context.actorId,
+          createdBy: context.actorId,
+          updatedBy: context.actorId,
+          status: 'ACTIVE',
+          customerId: resolved.customerId,
+          customerName: resolved.customerName,
+          sellerId: resolved.sellerId,
+          sellerName: resolved.sellerName,
           saleDate: parsed.saleDate,
           isDelivery: nextDeliveryState.isDelivery,
           deliveryStatus: nextDeliveryState.deliveryStatus,
@@ -534,8 +574,9 @@ export const SalesService = {
         })
 
         await created.save({ session })
-        await InventoryService.applySaleItems(toInventorySyncItems(items), currentUser.id, session)
-        appendHistory(created, 'created', 'Venda criada no sistema.')
+        await ProductReservationService.consumeForSale(items, resolved.customerId, context, session)
+        await InventoryService.applySaleItems(toInventorySyncItems(items), context, session)
+        appendHistory(context, created, 'created', 'Venda criada no sistema.')
         await created.save({ session })
         createdDTO = toSaleDTO(created)
       })
@@ -545,6 +586,8 @@ export const SalesService = {
       }
 
       return createdDTO
+    } catch (error) {
+      concurrentSaleChange(error)
     } finally {
       session.endSession()
     }
@@ -552,22 +595,36 @@ export const SalesService = {
 
   async update(id: string, data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await migrateLegacySaleDeliveryFields(currentUser.id)
-    await migrateLegacySalePaymentConditionFields(currentUser.id)
+    const context = await requireStoreContext()
     const session = await mongoose.startSession()
     try {
       let updatedDTO: ReturnType<typeof toSaleDTO> | undefined
       await session.withTransaction(async () => {
         const parsed = saleUpdateSchema.parse(data)
-        const sale = await findSaleOrThrow(id, currentUser.id, session)
+        const sale = await findSaleOrThrow(id, context.storeId, session)
+        if (sale.status === 'CANCELLED') {
+          throw new AppError('Venda cancelada não pode ser alterada.', 409)
+        }
+        if ((sale.__v ?? 0) !== parsed.expectedRevision) {
+          throw new AppError('A venda foi alterada por outra operação. Recarregue os dados e tente novamente.', 409)
+        }
         const previousItems = normalizeSaleItemsFromDocument(sale.items)
         const nextDeliveryState = normalizeSaleDeliveryState(parsed)
 
-        if (parsed.customerId !== undefined) sale.customerId = parsed.customerId
-        if (parsed.customerName !== undefined) sale.customerName = parsed.customerName
-        if (parsed.sellerId !== undefined) sale.sellerId = parsed.sellerId
-        if (parsed.sellerName !== undefined) sale.sellerName = parsed.sellerName
+        if (parsed.customerId !== undefined) {
+          if (!mongoose.isValidObjectId(parsed.customerId)) throw new AppError('Cliente não encontrado.', 404)
+          const customer = await CustomerModel.findOne({ _id: parsed.customerId, storeId: context.storeId }).session(session)
+          if (!customer) throw new AppError('Cliente não encontrado.', 404)
+          sale.customerId = String(customer._id)
+          sale.customerName = customer.name
+        }
+        if (parsed.sellerId !== undefined) {
+          if (!mongoose.isValidObjectId(parsed.sellerId)) throw new AppError('Vendedor não encontrado.', 404)
+          const seller = await EmployeeModel.findOne({ _id: parsed.sellerId, storeId: context.storeId, active: true }).session(session)
+          if (!seller) throw new AppError('Vendedor não encontrado.', 404)
+          sale.sellerId = String(seller._id)
+          sale.sellerName = seller.name
+        }
         if (parsed.saleDate !== undefined) sale.saleDate = parsed.saleDate
         if (parsed.isDelivery !== undefined) {
           sale.isDelivery = nextDeliveryState.isDelivery
@@ -582,7 +639,7 @@ export const SalesService = {
         if (parsed.shipping !== undefined) sale.shipping = roundCurrency(parsed.shipping)
         if (parsed.otherCosts !== undefined) sale.otherCosts = roundCurrency(parsed.otherCosts)
 
-        const nextItems = parsed.items !== undefined ? normalizeSaleItems(parsed.items) : previousItems
+        const nextItems = parsed.items !== undefined ? await resolveSaleItems(context, parsed.items, session) : previousItems
         if (parsed.items !== undefined) sale.set('items', nextItems)
 
         const { subtotal, total } = buildTotals(nextItems, sale.discount, sale.shipping, sale.otherCosts)
@@ -598,11 +655,14 @@ export const SalesService = {
         }
 
         sale.paymentCondition = prepareSalePaymentCondition(sale.paymentCondition as never) as never
+        const immediatePayment = isImmediateSalePaymentCondition((sale.paymentCondition as { type?: string }).type ?? '')
         const nextPayments = buildSalePayments(
           {
             paymentCondition: sale.paymentCondition as never,
             paymentMethod: sale.paymentMethod,
-            payments: sale.payments as unknown as Array<{ id?: string; amount?: number; date?: string; paymentMethod?: string; notes?: string }>,
+            payments: immediatePayment
+              ? []
+              : sale.payments as unknown as Array<{ id?: string; amount?: number; date?: string; paymentMethod?: string; notes?: string }>,
             initialPayment: sale.initialPayment,
             saleDate: sale.saleDate,
             total,
@@ -611,20 +671,23 @@ export const SalesService = {
           String(sale._id)
         )
         const paidAmount = getSalePaidAmount({ payments: nextPayments, paymentCondition: sale.paymentCondition as never, total })
+        validateSalePayments((sale.paymentCondition as { type?: string }).type ?? '', nextPayments, total, sale.initialPayment)
         sale.payments = nextPayments as never
         sale.paidAmount = paidAmount
         sale.remainingAmount = getSaleRemainingAmount(total, paidAmount)
         sale.paymentStatus = getSalePaymentStatus(total, paidAmount) as never
         sale.initialPayment = nextPayments[0]?.amount ?? sale.initialPayment ?? 0
-        if (!isImmediateSalePaymentCondition((sale.paymentCondition as { type?: string }).type ?? '')) {
+        if (!immediatePayment) {
           sale.paymentMethod = sale.paymentMethod || nextPayments[0]?.paymentMethod || ''
         }
 
         sale.updatedAt = new Date()
+        sale.updatedBy = new mongoose.Types.ObjectId(context.actorId)
 
+        await syncExistingDeliverySnapshot(context, sale, previousItems, nextItems, session)
         await sale.save({ session })
-        await InventoryService.reconcileSaleItems(toInventorySyncItems(previousItems), toInventorySyncItems(nextItems), currentUser.id, session)
-        appendHistory(sale, 'updated', 'Venda atualizada no sistema.')
+        await InventoryService.reconcileSaleItems(toInventorySyncItems(previousItems), toInventorySyncItems(nextItems), context, session)
+        appendHistory(context, sale, 'updated', 'Venda atualizada no sistema.')
         await sale.save({ session })
         updatedDTO = toSaleDTO(sale)
       })
@@ -634,6 +697,8 @@ export const SalesService = {
       }
 
       return updatedDTO
+    } catch (error) {
+      concurrentSaleChange(error)
     } finally {
       session.endSession()
     }
@@ -641,19 +706,25 @@ export const SalesService = {
 
   async remove(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const session = await mongoose.startSession()
     try {
       let result: { id: string; deleted: true } | null = null
       await session.withTransaction(async () => {
-        const sale = await findSaleOrThrow(id, currentUser.id, session)
-        const items = normalizeSaleItemsFromDocument(sale.items)
-        await InventoryService.revertSaleItems(toInventorySyncItems(items), currentUser.id, session)
+        const sale = await findSaleOrThrow(id, context.storeId, session)
+        const delivery = await DeliveryModel.findOne({ storeId: context.storeId, saleId: String(sale._id) }).session(session)
+        if (delivery) throw new AppError('Venda com entrega associada não pode ser excluída; cancele a venda para preservar o histórico.', 409)
+        if (sale.status !== 'CANCELLED') {
+          const items = normalizeSaleItemsFromDocument(sale.items)
+          await InventoryService.revertSaleItems(toInventorySyncItems(items), context, session)
+        }
         await sale.deleteOne({ session })
         result = { id: String(sale._id), deleted: true }
       })
 
       return result!
+    } catch (error) {
+      concurrentSaleChange(error)
     } finally {
       session.endSession()
     }
@@ -661,20 +732,21 @@ export const SalesService = {
 
   async history(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await migrateLegacySaleDeliveryFields(currentUser.id)
-    await migrateLegacySalePaymentConditionFields(currentUser.id)
-    return toHistoryDTO(await findSaleOrThrow(id, currentUser.id))
+    const context = await requireStoreContext()
+    return toHistoryDTO(await findSaleOrThrow(id, context.storeId))
   },
 
   async addPayment(id: string, data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const session = await mongoose.startSession()
     try {
       let updatedDTO: ReturnType<typeof toSaleDTO> | undefined
       await session.withTransaction(async () => {
-        const sale = await findSaleOrThrow(id, currentUser.id, session)
+        const sale = await findSaleOrThrow(id, context.storeId, session)
+        if (sale.status === 'CANCELLED') {
+          throw new AppError('Venda cancelada não pode receber pagamentos.', 409)
+        }
         const paymentCondition = prepareSalePaymentCondition(sale.paymentCondition as never)
         const total = sale.total
         const currentPayments = buildSalePayments(
@@ -694,7 +766,7 @@ export const SalesService = {
 
         const parsed = z.object({
           amount: z.preprocess((value) => normalizeDecimalValue(value), z.number().positive('Informe um valor maior que zero.')),
-          date: z.string().trim().min(1, 'Informe a data do pagamento.'),
+          date: z.string().trim().transform(normalizeBusinessDate).refine(isBusinessDate, 'Data do pagamento inválida.'),
           paymentMethod: z.string().trim().transform(normalizeTextInput).optional(),
           notes: z.string().trim().transform(normalizeTextInput).optional(),
         }).parse(data)
@@ -720,8 +792,9 @@ export const SalesService = {
           sale.paymentMethod = payment.paymentMethod
         }
 
-        appendHistory(sale, 'payment_added', `Pagamento registrado no valor de ${payment.amount.toFixed(2)}.`)
+        appendHistory(context, sale, 'payment_added', `Pagamento registrado no valor de ${payment.amount.toFixed(2)}.`)
         sale.updatedAt = new Date()
+        sale.updatedBy = new mongoose.Types.ObjectId(context.actorId)
         const updated = await sale.save({ session })
         updatedDTO = toSaleDTO(updated)
       })
@@ -731,6 +804,8 @@ export const SalesService = {
       }
 
       return updatedDTO
+    } catch (error) {
+      concurrentSaleChange(error)
     } finally {
       session.endSession()
     }
@@ -738,15 +813,27 @@ export const SalesService = {
 
   async cancel(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const session = await mongoose.startSession()
     try {
       let cancelledDTO: ReturnType<typeof toSaleDTO> | undefined
       await session.withTransaction(async () => {
-        const sale = await findSaleOrThrow(id, currentUser.id, session)
+        const sale = await findSaleOrThrow(id, context.storeId, session)
+        if (sale.status === 'CANCELLED') {
+          cancelledDTO = toSaleDTO(sale)
+          return
+        }
         const items = normalizeSaleItemsFromDocument(sale.items)
-        await InventoryService.revertSaleItems(toInventorySyncItems(items), currentUser.id, session)
-        appendHistory(sale, 'cancelled', 'Venda cancelada.')
+        await InventoryService.revertSaleItems(toInventorySyncItems(items), context, session)
+        sale.status = 'CANCELLED'
+        sale.deliveryStatus = 'CANCELLED'
+        sale.updatedBy = new mongoose.Types.ObjectId(context.actorId)
+        await DeliveryModel.updateOne(
+          { storeId: context.storeId, saleId: String(sale._id), status: { $ne: 'CANCELLED' } },
+          { $set: { status: 'CANCELLED', deliveredAt: null, updatedBy: new mongoose.Types.ObjectId(context.actorId), updatedAt: new Date() } },
+          { session }
+        )
+        appendHistory(context, sale, 'cancelled', 'Venda cancelada.')
         const updated = await sale.save({ session })
         cancelledDTO = toSaleDTO(updated)
       })
@@ -756,6 +843,12 @@ export const SalesService = {
       }
 
       return cancelledDTO
+    } catch (error) {
+      if (error instanceof mongoose.Error.VersionError) {
+        const current = await findSaleOrThrow(id, context.storeId)
+        if (current.status === 'CANCELLED') return toSaleDTO(current)
+      }
+      concurrentSaleChange(error)
     } finally {
       session.endSession()
     }

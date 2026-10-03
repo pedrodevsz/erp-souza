@@ -1,4 +1,4 @@
-export type SaleDeliveryStatus = 'PENDING' | 'DELIVERED'
+export type SaleDeliveryStatus = 'PENDING' | 'DELIVERED' | 'CANCELLED'
 export type SaleStatus = SaleDeliveryStatus
 export type SalePaymentConditionType = 'A_VISTA' | 'PARCELADO' | 'FIADO' | 'PRAZO'
 export type SaleInstallmentStatus = 'PENDENTE' | 'PAGO'
@@ -43,6 +43,8 @@ export interface SaleItem {
 
 export interface Sale {
   id: string
+  revision: number
+  status?: 'ACTIVE' | 'CANCELLED'
   customerId: string
   customerName: string
   sellerId: string
@@ -69,14 +71,14 @@ export interface Sale {
   updatedAt: string
 }
 
-export type NewSale = Omit<Sale, 'id' | 'createdAt' | 'updatedAt' | 'subtotal' | 'total' | 'items' | 'deliveryStatus' | 'paymentCondition' | 'payments' | 'paymentStatus' | 'paidAmount' | 'remainingAmount'> & {
+export type NewSale = Omit<Sale, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'subtotal' | 'total' | 'items' | 'deliveryStatus' | 'paymentCondition' | 'payments' | 'paymentStatus' | 'paidAmount' | 'remainingAmount'> & {
   paymentCondition: Omit<SalePaymentCondition, 'installments'>
   payments?: Array<Omit<SalePayment, 'id'>>
   initialPayment?: number
   items: Array<Omit<SaleItem, 'id' | 'subtotal'>>
 }
 
-export type UpdateSale = Partial<NewSale>
+export type UpdateSale = Partial<NewSale> & { expectedRevision: number }
 
 export type SaleFilters = {
   deliveryStatus: 'all' | SaleDeliveryStatus

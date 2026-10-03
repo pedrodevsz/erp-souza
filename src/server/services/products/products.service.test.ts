@@ -3,10 +3,13 @@ import test from 'node:test'
 import mongoose from 'mongoose'
 
 import { normalizeProductInput } from '@/lib/products'
+import { SINGLE_STORE_ID, type StoreContext } from '@/server/auth/store-context'
 import { calculateInventoryStatus, DEFAULT_MINIMUM_STOCK, normalizeMinimumStock } from '@/lib/inventories/inventory'
 import { ProductModel } from '@/server/models/products/products.model'
 import { findOrCreateCatalogProduct } from '../purchases/purchases.service'
 import { productCreateSchema } from '@/server/schemas/products/products.schema'
+
+const context: StoreContext = { storeId: SINGLE_STORE_ID, actorId: new mongoose.Types.ObjectId().toString(), role: 'USER' }
 
 test('productCreateSchema aceita marca ausente ou vazia', () => {
   assert.equal(productCreateSchema.safeParse({ name: 'Areia média', unit: 'm²', brand: '' }).success, true)
@@ -42,6 +45,7 @@ test('calculateInventoryStatus usa minimumStock como fonte de verdade', () => {
 
 test('ProductModel valida produto sem marca e com marca vazia', () => {
   const withoutBrand = new ProductModel({
+    storeId: SINGLE_STORE_ID,
     userId: new mongoose.Types.ObjectId(),
     name: 'AREIA MÉDIA',
     unit: 'M²',
@@ -50,6 +54,7 @@ test('ProductModel valida produto sem marca e com marca vazia', () => {
   })
 
   const withEmptyBrand = new ProductModel({
+    storeId: SINGLE_STORE_ID,
     userId: new mongoose.Types.ObjectId(),
     name: 'AREIA MÉDIA',
     unit: 'M²',
@@ -77,13 +82,14 @@ test('findOrCreateCatalogProduct cria produto sem marca e preserva marca existen
 
     const createdWithoutBrand = await findOrCreateCatalogProduct(
       { name: ' areia média ', unit: ' m² ' },
-      'user-1'
+      context
     )
 
     assert.equal(createdWithoutBrand.brand, '')
     assert.equal(createdWithoutBrand.product, 'AREIA MÉDIA M²')
 
     const existing = new ProductModel({
+      storeId: SINGLE_STORE_ID,
       userId: new mongoose.Types.ObjectId(),
       name: 'CIMENTO',
       unit: 'SC',
@@ -98,7 +104,7 @@ test('findOrCreateCatalogProduct cria produto sem marca e preserva marca existen
 
     const existingProduct = await findOrCreateCatalogProduct(
       { name: 'cimento', unit: 'sc', brand: 'votoran', salePrice: 100 },
-      'user-1'
+      context
     )
 
     assert.equal(existingProduct.brand, 'VOTORAN')
