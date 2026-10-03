@@ -65,21 +65,22 @@ export async function createSessionToken(user: SessionUser) {
 }
 
 export async function verifySessionToken(token: string): Promise<SessionUser | null> {
-  const [encodedPayload, encodedSignature] = token.split('.')
-  if (!encodedPayload || !encodedSignature) {
-    return null
-  }
-
-  const secretKey = await importSecretKey()
-  const payloadBytes = fromBase64Url(encodedPayload)
-  const signatureBytes = fromBase64Url(encodedSignature)
-  const isValid = await crypto.subtle.verify('HMAC', secretKey, signatureBytes, payloadBytes)
-
-  if (!isValid) {
+  const parts = token.split('.')
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
     return null
   }
 
   try {
+    const [encodedPayload, encodedSignature] = parts
+    const secretKey = await importSecretKey()
+    const payloadBytes = fromBase64Url(encodedPayload)
+    const signatureBytes = fromBase64Url(encodedSignature)
+    const isValid = await crypto.subtle.verify('HMAC', secretKey, signatureBytes, payloadBytes)
+
+    if (!isValid) {
+      return null
+    }
+
     const payload = JSON.parse(decoder.decode(payloadBytes)) as SessionTokenPayload
 
     if (!payload.userId || !payload.username || !payload.role || typeof payload.exp !== 'number') {
