@@ -5,7 +5,8 @@ import { MongoClient, ObjectId } from 'mongodb'
 import { hash } from 'bcryptjs'
 
 import { SINGLE_STORE_ID } from '@/server/auth/store-context'
-import { assertDisposableMongoMarker, validateDestructiveMongoTestTarget } from './helpers/mongodb-test-target'
+import { applyIndexPlan } from '../scripts/manage-mongodb-indexes'
+import { INTEGRATION_MARKER_COLLECTION, assertDisposableMongoMarker, validateDestructiveMongoTestTarget } from './helpers/mongodb-test-target'
 
 type ApiResult<T> = { status: number; data?: T; message?: string }
 type Inventory = { id: string; productId: string; productName: string; sku: string; unit: string; availableStock: number; salePrice: number }
@@ -88,6 +89,9 @@ test('escopo compartilhado, autoria, concorrencia e rollback via HTTP real', asy
 
   try {
     await db.dropDatabase()
+    await db.collection<{ _id: string; runId: string }>(INTEGRATION_MARKER_COLLECTION).insertOne({ _id: 'container-runner', runId: destructiveTarget.runId })
+    const indexResult = await applyIndexPlan(db)
+    assert.ok(indexResult.created.length > 0)
     await db.collection('users').insertMany([
       { _id: actorA, username: `A-${run}`, passwordHash, role: 'ADMIN', isActive: true, storeId: SINGLE_STORE_ID, createdAt: new Date(), updatedAt: new Date() },
       { _id: actorB, username: `B-${run}`, passwordHash, role: 'USER', isActive: true, storeId: SINGLE_STORE_ID, createdAt: new Date(), updatedAt: new Date() },

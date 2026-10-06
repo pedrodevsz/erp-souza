@@ -38,6 +38,7 @@ container_mongodb_uri='mongodb://127.0.0.1:27017/erp_souza_integration_test?repl
 export AUTH_SECRET='integration-test-secret-with-at-least-32-bytes'
 export STORE_TEST_BASE_URL='http://127.0.0.1:3011'
 docker exec "$container_id" mongosh --quiet "$container_mongodb_uri" --eval "db.getCollection('_erp_integration_runner').insertOne({_id:'container-runner',runId:'$ERP_INTEGRATION_RUN_ID'})" >/dev/null
+pnpm exec tsx --test tests/mongodb-index-rehearsal.test.ts
 pnpm exec next dev --webpack --hostname 127.0.0.1 --port 3011 >/tmp/erp-souza-next-integration.log 2>&1 &
 next_pid="$!"
 ready=0
