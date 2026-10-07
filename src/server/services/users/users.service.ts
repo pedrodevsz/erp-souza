@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 
-import { requireAdminApiUser } from '@/server/auth/guards'
 import { hashPassword } from '@/server/auth/password'
+import { requireStoreContext, type StoreContext } from '@/server/auth/store-context'
 import { connectToDatabase } from '@/server/db/mongodb'
 import { AppError } from '@/server/errors/app-error'
 import { toPublicUser } from '@/server/models/users/user-public'
@@ -9,13 +9,19 @@ import { getDuplicateKeyDiagnostics, isUsernameDuplicateError } from '@/server/m
 import { UserModel, type UserDocumentShape } from '@/server/models/users/users.model'
 import { userCreateSchema, userIdParamSchema, userUpdateSchema, type UserUpdateInput } from '@/server/schemas/users/users.schema'
 
-async function findUserOrThrow(id: string) {
+async function requireAdminStoreContext(): Promise<StoreContext> {
+  const context = await requireStoreContext()
+  if (context.role !== 'ADMIN') throw new AppError('Acesso restrito a administradores.', 403)
+  return context
+}
+
+async function findUserOrThrow(id: string, storeId: string) {
   const parsed = userIdParamSchema.parse({ id })
   if (!mongoose.isValidObjectId(parsed.id)) {
     throw new AppError('ID do usuário inválido.', 400)
   }
 
-  const user = await UserModel.findById(parsed.id)
+  const user = await UserModel.findOne({ _id: parsed.id, storeId })
   if (!user) {
     throw new AppError('Usuário não encontrado.', 404)
   }
@@ -32,15 +38,15 @@ function ensureManagedUser(user: { role: string }) {
 export const UserService = {
   async list() {
     await connectToDatabase()
-    await requireAdminApiUser()
+    const context = await requireAdminStoreContext()
 
-    const users = await UserModel.find({}).sort({ username: 1 }).lean()
+    const users = await UserModel.find({ storeId: context.storeId }).sort({ username: 1 }).lean()
     return users.map((user) => toPublicUser(user as UserDocumentShape))
   },
 
   async create(data: unknown) {
     await connectToDatabase()
-    await requireAdminApiUser()
+    const context = await requireAdminStoreContext()
 
     const parsed = userCreateSchema.parse(data)
     const existing = await UserModel.findOne({ username: parsed.username }).select('_id').lean()
@@ -52,6 +58,7 @@ export const UserService = {
       const created = await UserModel.create({
         username: parsed.username,
         passwordHash: await hashPassword(parsed.password),
+        storeId: context.storeId,
         role: 'USER',
         isActive: true,
       })
@@ -71,13 +78,13 @@ export const UserService = {
 
   async update(id: string, data: unknown) {
     await connectToDatabase()
-    const actor = await requireAdminApiUser()
+    const context = await requireAdminStoreContext()
     const parsed: UserUpdateInput = userUpdateSchema.parse(data)
-    const user = await findUserOrThrow(id)
+    const user = await findUserOrThrow(id, context.storeId)
 
     ensureManagedUser(user)
 
-    if (user._id.equals(actor.id) && parsed.isActive === false) {
+    if (String(user._id) === context.actorId && parsed.isActive === false) {
       throw new AppError('O administrador atual não pode desativar a própria conta.', 400)
     }
 

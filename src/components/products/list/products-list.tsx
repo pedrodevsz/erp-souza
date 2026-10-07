@@ -118,6 +118,55 @@ function formatMargin(item?: InventoryItem) {
   return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(item.profitPercentage)}%`
 }
 
+function ProductActionsMenu({
+  product,
+  onEdit,
+  onDelete,
+  onReserve,
+}: {
+  product: Product
+  onEdit: (product: Product) => void
+  onDelete: (id: string) => void
+  onReserve: (product: Product) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-2 rounded-full px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          aria-label={`Ações do produto ${product.product}`}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+          Ações
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-48">
+        <DropdownMenuItem asChild>
+          <Link href={`/dashboard/products/${product.id}`}>
+            <Eye className="h-4 w-4" />
+            Visualizar
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onEdit(product)}>
+          <PencilLine className="h-4 w-4" />
+          Editar
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onReserve(product)}>
+          <BookmarkPlus className="h-4 w-4" />
+          Reservar Produto
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onClick={() => onDelete(product.id)}>
+          <Trash2 className="h-4 w-4" />
+          Excluir
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function ProductMobileCard({
   product,
   inventoryItem,
@@ -166,36 +215,8 @@ function ProductMobileCard({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <Button asChild variant="outline" className="w-full">
-            <Link href={`/dashboard/products/${product.id}`}>
-              <Eye className="mr-2 h-4 w-4" />
-              Ver produto
-            </Link>
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" className="w-full justify-center">
-                <MoreHorizontal className="h-4 w-4" />
-                Mais ações
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-48">
-              <DropdownMenuItem onClick={() => onEdit(product)}>
-                <PencilLine className="h-4 w-4" />
-                Editar
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onReserve(product)}>
-                <BookmarkPlus className="h-4 w-4" />
-                Reservar Produto
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onClick={() => onDelete(product.id)}>
-                <Trash2 className="h-4 w-4" />
-                Excluir
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <div className="flex justify-end">
+          <ProductActionsMenu product={product} onEdit={onEdit} onDelete={onDelete} onReserve={onReserve} />
         </div>
       </CardContent>
     </Card>
@@ -455,7 +476,7 @@ export function ProductsList() {
                   <th className="px-4 py-3">Unidade</th>
                   <th className="px-4 py-3">Marca</th>
                   <th className="px-4 py-3">Preço de Venda</th>
-                  <th className="px-4 py-3">Ações</th>
+                  <th className="w-[140px] whitespace-nowrap px-4 py-3 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -479,27 +500,8 @@ export function ProductsList() {
                         <td className="px-4 py-3 align-top whitespace-nowrap">{product.unit}</td>
                         <td className="px-4 py-3 align-top">{product.brand}</td>
                         <td className="px-4 py-3 align-top whitespace-nowrap">{formatCurrency(resolveInventoryItem(product)?.salePrice ?? product.salePrice ?? 0)}</td>
-                        <td className="px-4 py-3 align-top">
-                          <div className="flex flex-wrap gap-2">
-                            <Button asChild variant="outline" size="sm">
-                              <Link href={`/dashboard/products/${product.id}`}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                Visualizar
-                              </Link>
-                            </Button>
-                            <Button type="button" variant="outline" size="sm" onClick={() => openEdit(product)}>
-                              <PencilLine className="mr-2 h-4 w-4" />
-                              Editar
-                            </Button>
-                            <Button type="button" variant="outline" size="sm" onClick={() => openReservation(product)}>
-                              <BookmarkPlus className="mr-2 h-4 w-4" />
-                              Reservar
-                            </Button>
-                            <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteId(product.id)}>
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Excluir
-                            </Button>
-                          </div>
+                        <td className="px-4 py-3 align-middle whitespace-nowrap text-center">
+                          <ProductActionsMenu product={product} onEdit={openEdit} onDelete={setDeleteId} onReserve={openReservation} />
                         </td>
                       </tr>
                     ))}
@@ -512,27 +514,8 @@ export function ProductsList() {
                           <td className="px-4 py-3 align-top whitespace-nowrap">{product.unit}</td>
                           <td className="px-4 py-3 align-top">{product.brand}</td>
                           <td className="px-4 py-3 align-top whitespace-nowrap">{formatCurrency(resolveInventoryItem(product)?.salePrice ?? product.salePrice ?? 0)}</td>
-                          <td className="px-4 py-3 align-top">
-                            <div className="flex flex-wrap gap-2">
-                              <Button asChild variant="outline" size="sm">
-                                <Link href={`/dashboard/products/${product.id}`}>
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  Visualizar
-                                </Link>
-                              </Button>
-                              <Button type="button" variant="outline" size="sm" onClick={() => openEdit(product)}>
-                                <PencilLine className="mr-2 h-4 w-4" />
-                                Editar
-                              </Button>
-                              <Button type="button" variant="outline" size="sm" onClick={() => openReservation(product)}>
-                                <BookmarkPlus className="mr-2 h-4 w-4" />
-                                Reservar
-                              </Button>
-                              <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteId(product.id)}>
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Excluir
-                              </Button>
-                            </div>
+                          <td className="px-4 py-3 align-middle whitespace-nowrap text-center">
+                            <ProductActionsMenu product={product} onEdit={openEdit} onDelete={setDeleteId} onReserve={openReservation} />
                           </td>
                         </tr>
                       ))}

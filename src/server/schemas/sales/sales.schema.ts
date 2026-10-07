@@ -162,7 +162,9 @@ export const saleCreateSchema = saleBaseSchema.extend({
   validatePaymentConditionPayments(data, ctx)
 })
 
-export const saleUpdateSchema = saleBaseSchema.partial().strict().superRefine((data, ctx) => {
+export const saleUpdateSchema = saleBaseSchema.partial().extend({
+  expectedRevision: z.number().int().min(0, 'Revisão da venda inválida.'),
+}).strict().superRefine((data, ctx) => {
   if (Object.values(data).every((value) => value === undefined)) {
     ctx.addIssue({ code: 'custom', message: 'Envie ao menos um campo para atualização.', path: [] })
   }
@@ -173,7 +175,7 @@ export const saleUpdateSchema = saleBaseSchema.partial().strict().superRefine((d
 
 export const saleListQuerySchema = z.object({
   search: z.string().trim().optional(),
-  deliveryStatus: z.enum(['PENDING', 'DELIVERED']).optional(),
+  deliveryStatus: z.enum(['PENDING', 'DELIVERED', 'CANCELLED']).optional(),
   paymentMethod: z.string().trim().optional(),
 })
 

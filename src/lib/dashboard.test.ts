@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { buildReceivedRevenueSeries, calculateReceivedRevenueByPeriod } from './dashboard'
+import {
+  buildReceivedRevenueSeries,
+  calculateReceivedRevenueByPeriod,
+  getCurrentMonthSalesCount,
+  getCurrentMonthSalesTotal,
+} from './dashboard'
 import type { Sale } from '@/types/sale'
 
 const baseSale: Sale = {
   id: 'sale-base',
+  revision: 0,
   customerId: 'customer-1',
   customerName: 'Cliente Teste',
   sellerId: 'seller-1',
@@ -207,4 +213,14 @@ test('gera série mensal com pagamentos separados por mês de recebimento', () =
     series.map((point) => point.value),
     [0, 500, 500]
   )
+})
+
+test('métricas mensais usam o total final das vendas e ignoram canceladas', () => {
+  const active = makeSale({ status: 'ACTIVE', saleDate: '2026-08-10', total: 250 })
+  const cancelled = makeSale({ status: 'CANCELLED', saleDate: '2026-08-11', total: 900 })
+  const previousMonth = makeSale({ status: 'ACTIVE', saleDate: '2026-07-31', total: 100 })
+  const now = new Date(2026, 7, 31, 12)
+
+  assert.equal(getCurrentMonthSalesTotal([active, cancelled, previousMonth], now), 250)
+  assert.equal(getCurrentMonthSalesCount([active, cancelled, previousMonth], now), 1)
 })

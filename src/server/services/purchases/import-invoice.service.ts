@@ -7,7 +7,7 @@ import { PurchaseModel } from '@/server/models/purchases/purchases.model'
 import { SupplierModel, type SupplierDocumentShape } from '@/server/models/suppliers/suppliers.model'
 import { InventoryModel, type InventoryDocumentShape } from '@/server/models/inventories/inventories.model'
 import { connectToDatabase } from '@/server/db/mongodb'
-import { requireCurrentUser } from '@/server/auth/current-user'
+import { requireStoreContext } from '@/server/auth/store-context'
 import { buildProductLabel } from '@/lib/products'
 import { calculatePurchaseSalePrice } from '@/lib/purchases'
 import { roundCurrency } from '@/lib/sales'
@@ -213,11 +213,11 @@ function normalizeExtraction(input: InvoiceExtraction): InvoiceExtraction {
   }
 }
 
-async function findSupplier(userId: string, extracted: InvoiceExtraction['supplier']) {
+async function findSupplier(storeId: string, extracted: InvoiceExtraction['supplier']) {
   const document = normalizeDigits(extracted.document ?? null)
   if (document) {
     const byDocument = await SupplierModel.findOne({
-      userId,
+      storeId,
       $or: [
         { name: { $regex: `^${escapeRegExp(extracted.name)}$`, $options: 'i' } },
       ],
@@ -229,7 +229,7 @@ async function findSupplier(userId: string, extracted: InvoiceExtraction['suppli
   }
 
   const normalizedName = normalizeSearchText(extracted.name)
-  const suppliers = await SupplierModel.find({ userId }).sort({ name: 1 }).lean<SupplierDocumentShape[]>()
+  const suppliers = await SupplierModel.find({ storeId }).sort({ name: 1 }).lean<SupplierDocumentShape[]>()
 
   const exact = suppliers.find((supplier) => normalizeSearchText(supplier.name) === normalizedName)
   if (exact) {
@@ -260,25 +260,25 @@ type ProductMatch = {
   suggestions: PurchaseImportItem['suggestedProducts']
 }
 
-async function findProductByCode(userId: string, code: string) {
+async function findProductByCode(storeId: string, code: string) {
   const normalizedCode = normalizeDigits(code)
   if (!normalizedCode) return null
 
   const inventory = await InventoryModel.findOne({
-    userId,
+    storeId,
     $or: [{ sku: normalizedCode }, { productId: normalizedCode }],
   }).lean<InventoryDocumentShape | null>()
 
   if (inventory) {
-    const byId = await ProductModel.findOne({ userId, _id: inventory.productId }).lean<ProductDocumentShape | null>()
+    const byId = await ProductModel.findOne({ storeId, _id: inventory.productId }).lean<ProductDocumentShape | null>()
     if (byId) return byId
   }
 
   return null
 }
 
-async function matchProduct(userId: string, item: InvoiceExtraction['items'][number]): Promise<ProductMatch> {
-  const exactByCode = await findProductByCode(userId, item.barcode ?? item.supplierCode ?? '')
+async function matchProduct(storeId: string, item: InvoiceExtraction['items'][number]): Promise<ProductMatch> {
+  const exactByCode = await findProductByCode(storeId, item.barcode ?? item.supplierCode ?? '')
   if (exactByCode) {
     return { product: exactByCode, status: 'exact', confidence: 1, suggestions: [] }
   }
@@ -287,7 +287,7 @@ async function matchProduct(userId: string, item: InvoiceExtraction['items'][num
   const normalizedBrand = normalizeSearchText(item.brand ?? '')
   const normalizedUnit = normalizeSearchText(item.unit)
 
-  const products = await ProductModel.find({ userId }).sort({ product: 1 }).lean<ProductDocumentShape[]>()
+  const products = await ProductModel.find({ storeId }).sort({ product: 1 }).lean<ProductDocumentShape[]>()
   const exact = products.find((product) => {
     const normalizedProduct = normalizeSearchText(product.name)
     const normalizedProductBrand = normalizeSearchText(product.brand ?? '')
@@ -357,13 +357,13 @@ async function matchProduct(userId: string, item: InvoiceExtraction['items'][num
   })) }
 }
 
-async function findProfitPercentage(userId: string, productId: string) {
-  const inventory = await InventoryModel.findOne({ userId, productId }).lean<InventoryDocumentShape | null>()
+async function findProfitPercentage(storeId: string, productId: string) {
+  const inventory = await InventoryModel.findOne({ storeId, productId }).lean<InventoryDocumentShape | null>()
   if (inventory && Number.isFinite(inventory.profitPercentage)) {
     return inventory.profitPercentage
   }
 
-  const purchase = await PurchaseModel.findOne({ userId, 'items.productId': productId }).sort({ createdAt: -1 }).lean<{
+  const purchase = await PurchaseModel.findOne({ storeId, 'items.productId': productId }).sort({ createdAt: -1 }).lean<{
     items?: Array<{ productId: string; profitPercentage?: number }>
   } | null>()
 
@@ -561,7 +561,7 @@ function determineStatus(items: PurchaseImportItem[], warnings: PurchaseImportWa
 
 export async function importPurchaseInvoice(file: File): Promise<PurchaseImportResponse> {
   await connectToDatabase()
-  const currentUser = await requireCurrentUser()
+  const context = await requireStoreContext()
   const validatedFile = await validateUploadFile(file)
 
   let extracted: InvoiceExtraction
@@ -575,12 +575,12 @@ export async function importPurchaseInvoice(file: File): Promise<PurchaseImportR
     throw new AppError('Documento sem produtos identificáveis.', 422)
   }
 
-  const supplierResult = await findSupplier(currentUser.id, extracted.supplier)
+  const supplierResult = await findSupplier(context.storeId, extracted.supplier)
   const matchedItems: Array<{ item: InvoiceExtraction['items'][number]; productMatch: ProductMatch; profitPercentage: number; salePrice: number }> = []
   for (const item of extracted.items) {
-    const productMatch = await matchProduct(currentUser.id, item)
+    const productMatch = await matchProduct(context.storeId, item)
     const productId = productMatch.product ? String(productMatch.product._id) : null
-    const profitPercentage = productId ? await findProfitPercentage(currentUser.id, productId) : 50
+    const profitPercentage = productId ? await findProfitPercentage(context.storeId, productId) : 50
     const salePrice = calculatePurchaseSalePrice(item.unitPrice, profitPercentage)
     matchedItems.push({ item, productMatch, profitPercentage, salePrice })
   }

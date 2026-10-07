@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { purchaseCreateSchema } from '@/server/schemas/purchases/purchases.schema'
+import { purchaseCreateSchema, purchaseUpdateSchema } from '@/server/schemas/purchases/purchases.schema'
 
 function buildBasePurchaseItem(overrides: Record<string, unknown> = {}) {
   return {
@@ -50,6 +50,12 @@ test('purchaseCreateSchema não aceita data de compra enviada pelo cliente', () 
     paymentCondition: [],
     items: [buildBasePurchaseItem()],
   })
+
+  assert.equal(result.success, false)
+})
+
+test('purchaseUpdateSchema preserva a data original ao recusar purchaseDate', () => {
+  const result = purchaseUpdateSchema.safeParse({ purchaseDate: '2099-01-01' })
 
   assert.equal(result.success, false)
 })

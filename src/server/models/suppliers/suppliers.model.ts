@@ -3,7 +3,10 @@ import { normalizeTextInput } from '@/lib/text'
 
 const supplierSchema = new Schema(
   {
+    storeId: { type: String, required: true, trim: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     name: { type: String, required: true, trim: true, index: true, set: normalizeTextInput },
   },
   {
@@ -21,7 +24,7 @@ const supplierSchema = new Schema(
 )
 
 supplierSchema.index({ name: 1 })
-supplierSchema.index({ userId: 1, name: 1 }, { unique: true })
+supplierSchema.index({ storeId: 1, name: 1 }, { unique: true })
 
 export type SupplierModelFields = InferSchemaType<typeof supplierSchema>
 

@@ -1,8 +1,9 @@
 import mongoose from 'mongoose'
 
 import { connectToDatabase } from '@/server/db/mongodb'
-import { requireCurrentUser } from '@/server/auth/current-user'
+import { requireStoreContext, type StoreContext } from '@/server/auth/store-context'
 import { AppError } from '@/server/errors/app-error'
+import { InventoryModel } from '@/server/models/inventories/inventories.model'
 import { ProductModel } from '@/server/models/products/products.model'
 import { PurchaseModel, type PurchaseDTO, type PurchaseDocumentShape } from '@/server/models/purchases/purchases.model'
 import { InventoryService } from '@/server/services/inventories/inventories.service'
@@ -37,37 +38,6 @@ function normalizeCategory(value: string | null | undefined) {
   return ['geral', 'hidraulico', 'eletrico', 'acabamento'].includes(normalized) ? normalized : 'geral'
 }
 
-async function migrateLegacyPurchasePaymentConditions(userId: string) {
-  const legacyPurchases = await PurchaseModel.find({
-    userId,
-    $or: [
-      { paymentCondition: { $type: 'string' } },
-      { paymentCondition: { $type: 'object' } },
-      { paymentCondition: { $exists: false } },
-      { paymentCondition: null },
-    ],
-  })
-    .select({ paymentCondition: 1 })
-    .lean<Array<{ _id: mongoose.Types.ObjectId; paymentCondition?: string | string[] | { n1?: string; n2?: string; n3?: string } | null }>>()
-
-  if (legacyPurchases.length === 0) {
-    return
-  }
-
-  await Promise.all(
-    legacyPurchases.map((purchase) =>
-      PurchaseModel.updateOne(
-        { _id: purchase._id },
-        {
-          $set: {
-            paymentCondition: normalizePurchasePaymentCondition(purchase.paymentCondition),
-          },
-        }
-      )
-    )
-  )
-}
-
 type NormalizedPurchaseItem = {
   productId: string
   productName: string
@@ -85,12 +55,12 @@ type NormalizedPurchaseItem = {
 
 export async function findOrCreateCatalogProduct(
   input: { name: string; unit: string; brand?: string; salePrice?: number },
-  userId: string,
+  context: StoreContext,
   session?: mongoose.ClientSession
 ) {
   const normalized = normalizeProductInput(input)
   const existing = await ProductModel.findOne({
-    userId,
+    storeId: context.storeId,
     name: normalized.name,
     unit: normalized.unit,
     brand: normalized.brand,
@@ -99,6 +69,7 @@ export async function findOrCreateCatalogProduct(
   if (existing) {
     if (Number.isFinite(input.salePrice) && input.salePrice !== undefined && input.salePrice >= 0 && existing.salePrice !== input.salePrice) {
       existing.salePrice = input.salePrice
+      existing.updatedBy = new mongoose.Types.ObjectId(context.actorId)
       return await existing.save(session ? { session } : undefined)
     }
 
@@ -106,7 +77,10 @@ export async function findOrCreateCatalogProduct(
   }
 
   const created = new ProductModel({
-    userId,
+    storeId: context.storeId,
+    userId: context.actorId,
+    createdBy: context.actorId,
+    updatedBy: context.actorId,
     ...normalized,
     product: buildProductLabel(normalized.name, normalized.unit, normalized.brand),
     salePrice: Number.isFinite(input.salePrice) && input.salePrice !== undefined ? input.salePrice : 0,
@@ -117,7 +91,7 @@ export async function findOrCreateCatalogProduct(
   } catch (error) {
     if (typeof error === 'object' && error && 'code' in error && (error as { code?: number }).code === 11000) {
       const recovered = await ProductModel.findOne({
-        userId,
+        storeId: context.storeId,
         name: normalized.name,
         unit: normalized.unit,
         brand: normalized.brand,
@@ -132,7 +106,7 @@ export async function findOrCreateCatalogProduct(
   }
 }
 
-async function normalizeItems(items: UpdatePurchaseInput['items'] | undefined, userId: string, session?: mongoose.ClientSession) {
+async function normalizeItems(items: UpdatePurchaseInput['items'] | undefined, context: StoreContext, session?: mongoose.ClientSession) {
   const output: NormalizedPurchaseItem[] = []
 
   for (const item of items ?? []) {
@@ -145,22 +119,35 @@ async function normalizeItems(items: UpdatePurchaseInput['items'] | undefined, u
         ? item.salePrice
         : calculatePurchaseSalePrice(item.unitPrice, item.profitPercentage ?? 0)
     const catalogProduct = item.productId
-      ? await ProductModel.findOne({ _id: item.productId, userId }).session(session ?? null)
-      : await findOrCreateCatalogProduct({ name: productName, unit, brand, salePrice }, userId, session)
+      ? await ProductModel.findOne({ _id: item.productId, storeId: context.storeId }).session(session ?? null)
+      : await findOrCreateCatalogProduct({ name: productName, unit, brand, salePrice }, context, session)
+    const inventoryProduct = item.productId && !catalogProduct
+      ? await InventoryModel.findOne({
+          storeId: context.storeId,
+          $or: [{ productId: item.productId }, ...(mongoose.isValidObjectId(item.productId) ? [{ _id: item.productId }] : [])],
+        }).session(session ?? null)
+      : null
+    if (item.productId && !catalogProduct && !inventoryProduct) {
+      throw new AppError('Produto não encontrado.', 404)
+    }
 
-    const resolvedProduct = catalogProduct ?? (await findOrCreateCatalogProduct({ name: productName, unit, brand, salePrice }, userId, session))
+    const resolvedProductId = catalogProduct ? String(catalogProduct._id) : inventoryProduct!.productId
+    const resolvedProductName = catalogProduct?.name ?? inventoryProduct!.productName
+    const resolvedBrand = catalogProduct?.brand ?? inventoryProduct!.brand ?? ''
+    const resolvedUnit = catalogProduct?.unit ?? inventoryProduct!.unit
+    const resolvedLabel = catalogProduct?.product ?? inventoryProduct!.product
     const discount = item.discount ?? 0
     const profitPercentage =
       item.profitPercentage ?? calculatePurchaseProfitPercentage(item.unitPrice, salePrice)
     const subtotal = roundCurrency(item.quantity * item.unitPrice - discount)
     output.push({
-      productId: String(resolvedProduct._id),
-      productName,
-      brand: resolvedProduct.brand ?? '',
-      product: resolvedProduct.product || buildProductLabel(productName, unit, brand),
+      productId: resolvedProductId,
+      productName: resolvedProductName,
+      brand: resolvedBrand,
+      product: resolvedLabel || buildProductLabel(resolvedProductName, resolvedUnit, resolvedBrand),
       category,
       quantity: item.quantity,
-      unit: resolvedProduct.unit,
+      unit: resolvedUnit,
       unitPrice: item.unitPrice,
       profitPercentage,
       salePrice,
@@ -169,7 +156,39 @@ async function normalizeItems(items: UpdatePurchaseInput['items'] | undefined, u
     })
   }
 
-  return output
+  const grouped = new Map<string, NormalizedPurchaseItem>()
+  for (const item of output) {
+    const existing = grouped.get(item.productId)
+    if (!existing) {
+      grouped.set(item.productId, item)
+      continue
+    }
+    if (existing.unitPrice !== item.unitPrice || existing.unit !== item.unit) {
+      throw new AppError('Itens repetidos do mesmo produto precisam usar o mesmo preço e unidade.', 400)
+    }
+    existing.quantity += item.quantity
+    existing.discount = roundCurrency(existing.discount + item.discount)
+    existing.subtotal = roundCurrency(existing.quantity * existing.unitPrice - existing.discount)
+  }
+
+  return [...grouped.values()]
+}
+
+function normalizeStoredItems(items: PurchaseDocumentShape['items']): NormalizedPurchaseItem[] {
+  return items.map((item) => ({
+    productId: item.productId,
+    productName: item.productName,
+    brand: item.brand ?? '',
+    product: item.product ?? buildProductLabel(item.productName, item.unit, item.brand ?? ''),
+    category: item.category ?? 'geral',
+    quantity: item.quantity,
+    unit: item.unit,
+    unitPrice: item.unitPrice,
+    profitPercentage: item.profitPercentage,
+    salePrice: item.salePrice,
+    discount: item.discount ?? 0,
+    subtotal: item.subtotal,
+  }))
 }
 
 function calculateTotals(items: NormalizedPurchaseItem[], discounts = 0, freight = 0, otherExpenses = 0) {
@@ -214,14 +233,14 @@ function toPurchaseDTO(purchase: PurchaseDocumentShape): PurchaseDTO {
   }
 }
 
-async function findPurchaseOrThrow(id: string, userId: string, session?: mongoose.ClientSession) {
+async function findPurchaseOrThrow(id: string, storeId: string, session?: mongoose.ClientSession) {
   const parsed = purchaseIdParamSchema.parse({ id })
 
   if (!mongoose.isValidObjectId(parsed.id)) {
     throw new AppError('ID da compra inválido.', 400)
   }
 
-  const purchase = await PurchaseModel.findOne({ _id: parsed.id, userId }).session(session ?? null)
+  const purchase = await PurchaseModel.findOne({ _id: parsed.id, storeId }).session(session ?? null)
   if (!purchase) {
     throw new AppError('Compra não encontrada.', 404)
   }
@@ -248,11 +267,10 @@ function toInventorySyncItems(items: NormalizedPurchaseItem[]) {
 export const PurchaseService = {
   async list(search?: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await migrateLegacyPurchasePaymentConditions(currentUser.id)
+    const context = await requireStoreContext()
 
     const parsed = purchaseListQuerySchema.parse({ search })
-    const filter: Record<string, unknown> = { userId: currentUser.id }
+    const filter: Record<string, unknown> = { storeId: context.storeId }
     if (parsed.search) {
       filter.$or = [
         { supplier: { $regex: escapeRegExp(parsed.search), $options: 'i' } },
@@ -266,25 +284,26 @@ export const PurchaseService = {
 
   async getById(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await migrateLegacyPurchasePaymentConditions(currentUser.id)
-    return toPurchaseDTO(await findPurchaseOrThrow(id, currentUser.id))
+    const context = await requireStoreContext()
+    return toPurchaseDTO(await findPurchaseOrThrow(id, context.storeId))
   },
 
   async create(data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await migrateLegacyPurchasePaymentConditions(currentUser.id)
+    const context = await requireStoreContext()
     const session = await mongoose.startSession()
     try {
       let createdDTO: PurchaseDTO | undefined
       await session.withTransaction(async () => {
         const parsed = purchaseCreateSchema.parse(data)
-        const items = await normalizeItems(parsed.items, currentUser.id, session)
+        const items = await normalizeItems(parsed.items, context, session)
         const { subtotal, total } = calculateTotals(items, parsed.discounts ?? 0, parsed.freight ?? 0, parsed.otherExpenses ?? 0)
 
         const created = new PurchaseModel({
-          userId: currentUser.id,
+          storeId: context.storeId,
+          userId: context.actorId,
+          createdBy: context.actorId,
+          updatedBy: context.actorId,
           supplier: normalizeTextInput(parsed.supplier),
           purchaseDate: getTodayBusinessDate(),
           expectedDelivery: normalizeOptionalText(parsed.expectedDelivery),
@@ -301,7 +320,7 @@ export const PurchaseService = {
         })
 
         await created.save({ session })
-        await InventoryService.applyPurchaseItems(toInventorySyncItems(items), normalizeTextInput(parsed.supplier), currentUser.id, session)
+        await InventoryService.applyPurchaseItems(toInventorySyncItems(items), normalizeTextInput(parsed.supplier), context, session)
         createdDTO = toPurchaseDTO(created)
       })
 
@@ -317,15 +336,14 @@ export const PurchaseService = {
 
   async update(id: string, data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await migrateLegacyPurchasePaymentConditions(currentUser.id)
+    const context = await requireStoreContext()
     const session = await mongoose.startSession()
     try {
       let updatedDTO: PurchaseDTO | undefined
       await session.withTransaction(async () => {
         const parsed = purchaseUpdateSchema.parse(data)
-        const purchase = await findPurchaseOrThrow(id, currentUser.id, session)
-        const previousItems = await normalizeItems(purchase.items as unknown as UpdatePurchaseInput['items'], currentUser.id, session)
+        const purchase = await findPurchaseOrThrow(id, context.storeId, session)
+        const previousItems = normalizeStoredItems(purchase.items)
 
         if (parsed.supplier !== undefined) purchase.supplier = normalizeTextInput(parsed.supplier)
         if (parsed.expectedDelivery !== undefined) purchase.expectedDelivery = normalizeOptionalText(parsed.expectedDelivery)
@@ -339,19 +357,20 @@ export const PurchaseService = {
         if (parsed.freight !== undefined) purchase.freight = roundCurrency(parsed.freight)
         if (parsed.otherExpenses !== undefined) purchase.otherExpenses = roundCurrency(parsed.otherExpenses)
 
-        const nextItems = parsed.items !== undefined ? await normalizeItems(parsed.items, currentUser.id, session) : previousItems
+        const nextItems = parsed.items !== undefined ? await normalizeItems(parsed.items, context, session) : previousItems
         if (parsed.items !== undefined) purchase.set('items', nextItems)
 
         const { subtotal, total } = calculateTotals(nextItems, purchase.discounts, purchase.freight, purchase.otherExpenses)
         purchase.subtotal = subtotal
         purchase.total = total
+        purchase.updatedBy = new mongoose.Types.ObjectId(context.actorId)
 
         await purchase.save({ session })
         await InventoryService.reconcilePurchaseItems(
           toInventorySyncItems(previousItems),
           toInventorySyncItems(nextItems),
           purchase.supplier,
-          currentUser.id,
+          context,
           session
         )
         updatedDTO = toPurchaseDTO(purchase)
@@ -369,15 +388,14 @@ export const PurchaseService = {
 
   async remove(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await migrateLegacyPurchasePaymentConditions(currentUser.id)
+    const context = await requireStoreContext()
     const session = await mongoose.startSession()
     try {
       let result: { id: string; deleted: true } | undefined
       await session.withTransaction(async () => {
-        const purchase = await findPurchaseOrThrow(id, currentUser.id, session)
-        const previousItems = await normalizeItems(purchase.items as unknown as UpdatePurchaseInput['items'], currentUser.id, session)
-        await InventoryService.revertPurchaseItems(toInventorySyncItems(previousItems), currentUser.id, session)
+        const purchase = await findPurchaseOrThrow(id, context.storeId, session)
+        const previousItems = normalizeStoredItems(purchase.items)
+        await InventoryService.revertPurchaseItems(toInventorySyncItems(previousItems), context, session)
         await purchase.deleteOne({ session })
         result = { id: String(purchase._id), deleted: true }
       })

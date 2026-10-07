@@ -1,17 +1,21 @@
-export const ReportsService = {
-    async getOverview(_query: any) {
-        return {
-            totals: {},
-            byModule: {},
-        }
-    },
+import type { ReportQuery } from '@/server/schemas/reports/reports.schema'
 
-    async getModuleReport(_module: string, _query: any) {
-        return {
-            module: _module,
-            data: [],
-        }
-    },
+export const ReportsService = {
+  async getOverview(query: ReportQuery) {
+    void query
+    return {
+      totals: {},
+      byModule: {},
+    }
+  },
+
+  async getModuleReport(module: string, query: ReportQuery) {
+    void query
+    return {
+      module,
+      data: [],
+    }
+  },
 }
 
 export default ReportsService

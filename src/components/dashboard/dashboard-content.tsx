@@ -9,13 +9,11 @@ import { DashboardService } from '@/services/dashboardService'
 import { useSupplierStore } from '@/stores/useSupplierStore'
 import {
   buildMonthlySeries,
-  buildReceivedRevenueSeries,
-  calculateGrossProfit,
-  calculateReceivedRevenueByPeriod,
   formatDashboardCurrency,
   formatDashboardNumber,
   getCurrentMonthPurchaseTotal,
   getCurrentMonthSalesCount,
+  getCurrentMonthSalesTotal,
   getPendingOrdersCount,
 } from '@/lib/dashboard'
 import type { DashboardSummary } from '@/types/dashboard'
@@ -79,14 +77,15 @@ export function DashboardContent({ initialSummary, initialLoadError = null }: Pr
   const purchases = summary.purchases
   const inventoryItems = summary.inventoryItems
   const deliveries = summary.deliveries
+  const activeSales = useMemo(() => sales.filter((sale) => sale.status !== 'CANCELLED'), [sales])
 
-  const currentMonthRevenue = useMemo(() => calculateReceivedRevenueByPeriod(sales), [sales])
-  const currentMonthSalesCount = useMemo(() => getCurrentMonthSalesCount(sales), [sales])
+  const currentMonthRevenue = useMemo(() => getCurrentMonthSalesTotal(activeSales), [activeSales])
+  const currentMonthSalesCount = useMemo(() => getCurrentMonthSalesCount(activeSales), [activeSales])
   const currentMonthPurchasesTotal = useMemo(() => getCurrentMonthPurchaseTotal(purchases), [purchases])
-  const currentMonthGrossProfit = useMemo(() => calculateGrossProfit(sales, inventoryItems), [inventoryItems, sales])
+  const currentMonthGrossProfit = currentMonthRevenue - currentMonthPurchasesTotal
   const pendingOrders = useMemo(() => getPendingOrdersCount(deliveries), [deliveries])
-  const revenueSeries = useMemo(() => buildReceivedRevenueSeries(sales, 6), [sales])
-  const salesCountSeries = useMemo(() => buildMonthlySeries(sales, 6, (sale) => sale.saleDate, () => 1), [sales])
+  const revenueSeries = useMemo(() => buildMonthlySeries(activeSales, 6, (sale) => sale.saleDate, (sale) => sale.total), [activeSales])
+  const salesCountSeries = useMemo(() => buildMonthlySeries(activeSales, 6, (sale) => sale.saleDate, () => 1), [activeSales])
   const purchasesSeries = useMemo(() => buildMonthlySeries(purchases, 6, (purchase) => purchase.purchaseDate, (purchase) => purchase.total), [purchases])
   const grossProfitSeries = useMemo(
     () =>
@@ -97,8 +96,8 @@ export function DashboardContent({ initialSummary, initialLoadError = null }: Pr
     [purchasesSeries, revenueSeries]
   )
   const pendingSeries = useMemo(
-    () => buildMonthlySeries(sales, 6, (sale) => sale.saleDate, (sale) => (sale.deliveryStatus === 'PENDING' ? 1 : 0)),
-    [sales]
+    () => buildMonthlySeries(activeSales, 6, (sale) => sale.saleDate, (sale) => (sale.deliveryStatus === 'PENDING' ? 1 : 0)),
+    [activeSales]
   )
 
   const revenueState: MetricState = loading ? 'loading' : loadError ? 'error' : currentMonthRevenue === 0 ? 'empty' : 'ready'

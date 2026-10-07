@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 
+import { requireStoreContext } from '@/server/auth/store-context'
 import { handleRouteError, successResponse } from '@/server/http/api-response'
 import { reportModuleParamSchema, reportQuerySchema } from '@/server/schemas/reports/reports.schema'
 import { ReportsService } from '@/server/services/reports/reports.service'
@@ -12,6 +13,7 @@ type RouteContext = {
 
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
+    await requireStoreContext()
     const { module } = await context.params
     const parsedParams = reportModuleParamSchema.parse({ module })
     const query = reportQuerySchema.parse({

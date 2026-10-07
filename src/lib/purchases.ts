@@ -2,7 +2,7 @@ import type { Purchase, NewPurchase, PurchasePaymentCondition } from '@/types/pu
 import type { PurchaseImportDraft } from '@/types/purchases-import'
 import { roundCurrency } from '@/lib/sales'
 
-type PurchaseFormSource = (Partial<NewPurchase> & { purchaseDate?: string }) | Purchase | PurchaseImportDraft | null | undefined
+type PurchaseFormSource = Partial<NewPurchase> | Purchase | PurchaseImportDraft | null | undefined
 type LegacyPurchasePaymentCondition = { n1?: string | null; n2?: string | null; n3?: string | null }
 
 export const MAX_PURCHASE_PAYMENT_CONDITIONS = 15
@@ -143,11 +143,10 @@ export function calculatePurchaseProfitPercentage(unitPrice: number, salePrice: 
     return Math.max(0, roundCurrency(((salePrice - unitPrice) / unitPrice) * 100))
 }
 
-export function buildPurchaseFormValues(purchase?: PurchaseFormSource): Partial<NewPurchase> & { purchaseDate?: string } {
+export function buildPurchaseFormValues(purchase?: PurchaseFormSource): Partial<NewPurchase> {
     if (!purchase) {
         return {
             supplier: '',
-            purchaseDate: '',
             expectedDelivery: null,
             paymentCondition: [],
             paymentMethod: null,
@@ -162,7 +161,6 @@ export function buildPurchaseFormValues(purchase?: PurchaseFormSource): Partial<
 
     return {
         supplier: purchase.supplier,
-        purchaseDate: purchase.purchaseDate,
         expectedDelivery: purchase.expectedDelivery ?? null,
         paymentCondition: normalizePurchasePaymentCondition(purchase.paymentCondition),
         paymentMethod: purchase.paymentMethod ?? null,

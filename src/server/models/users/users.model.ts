@@ -7,6 +7,7 @@ const userSchema = new Schema(
   {
     username: { type: String, required: true, trim: true, index: true, unique: true, set: normalizeTextInput },
     passwordHash: { type: String, required: true, trim: true },
+    storeId: { type: String, trim: true, index: true },
     role: {
       type: String,
       required: true,

@@ -2,7 +2,7 @@ import mongoose from 'mongoose'
 
 import { connectToDatabase } from '@/server/db/mongodb'
 import { AppError } from '@/server/errors/app-error'
-import { requireCurrentUser } from '@/server/auth/current-user'
+import { requireStoreContext, type StoreContext } from '@/server/auth/store-context'
 import { ProductModel } from '@/server/models/products/products.model'
 import {
   InventoryModel,
@@ -67,7 +67,7 @@ function toFiniteNumber(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-export function buildPurchaseInventoryPayload(item: InventorySyncItem, supplier: string, quantity: number, userId: string) {
+export function buildPurchaseInventoryPayload(item: InventorySyncItem, supplier: string, quantity: number, context: StoreContext) {
   const productName = normalizeProductText(item.productName)
   const unit = normalizeProductText(item.unit)
   const brand = normalizeProductText(item.brand)
@@ -76,7 +76,10 @@ export function buildPurchaseInventoryPayload(item: InventorySyncItem, supplier:
   const profitPercentage = item.profitPercentage ?? calculateInventoryProfitPercentage(item.unitPrice, item.salePrice ?? item.unitPrice)
 
   return {
-    userId,
+    storeId: context.storeId,
+    userId: context.actorId,
+    createdBy: context.actorId,
+    updatedBy: context.actorId,
     productId: normalizeProductId(item.productId),
     productName,
     brand,
@@ -99,8 +102,7 @@ export function buildPurchaseInventoryPayload(item: InventorySyncItem, supplier:
   }
 }
 
-async function findInventoryByProduct(item: Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand'>, session?: mongoose.ClientSession) {
-  const currentUser = await requireCurrentUser()
+async function findInventoryByProduct(context: StoreContext, item: Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand'>, session?: mongoose.ClientSession) {
   const brand = normalizeProductText(item.brand)
   const productId = normalizeProductId(item.productId)
   const filters: Array<Record<string, unknown>> = [
@@ -115,10 +117,11 @@ async function findInventoryByProduct(item: Pick<InventorySyncItem, 'productId' 
     filters.unshift({ productId })
   }
 
-  return InventoryModel.findOne({ userId: currentUser.id, $or: filters }).session(session ?? null)
+  return InventoryModel.findOne({ storeId: context.storeId, $or: filters }).session(session ?? null)
 }
 
 async function saveMovement(
+  context: StoreContext,
   itemId: string,
   type: 'Entrada' | 'Saída' | 'Ajuste' | 'Transferência',
   quantity: number,
@@ -126,9 +129,10 @@ async function saveMovement(
   user: string,
   session?: mongoose.ClientSession
 ) {
-  const currentUser = await requireCurrentUser()
   const movement = new InventoryMovementModel({
-    userId: currentUser.id,
+    storeId: context.storeId,
+    userId: context.actorId,
+    actorId: context.actorId,
     itemId,
     type: normalizeTextInput(type),
     quantity,
@@ -141,6 +145,7 @@ async function saveMovement(
 }
 
 async function applyDelta(
+  context: StoreContext,
   item: InventoryDocumentShape,
   delta: number,
   mode: 'purchase' | 'sale' | 'purchase-revert' | 'sale-revert',
@@ -162,6 +167,7 @@ async function applyDelta(
   item.currentStock = nextStock
   item.availableStock = calculateAvailableStock(nextStock, reservedStock)
   item.updatedAt = new Date()
+  item.updatedBy = new mongoose.Types.ObjectId(context.actorId)
 
   if (nextDelta > 0) {
     item.lastEntryDate = nowISO()
@@ -172,6 +178,7 @@ async function applyDelta(
   const saved = await item.save(session ? { session } : undefined)
 
   await saveMovement(
+    context,
     String(saved._id),
     nextDelta > 0 ? 'Entrada' : 'Saída',
     Math.abs(nextDelta),
@@ -190,17 +197,26 @@ async function applyDelta(
 }
 
 async function reconcileByProductId(
+  context: StoreContext,
   previousItems: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'unitPrice' | 'profitPercentage' | 'salePrice' | 'product' | 'sku'>>,
   nextItems: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'unitPrice' | 'profitPercentage' | 'salePrice' | 'product' | 'sku'>>,
   supplier: string | undefined,
-  userId: string,
   session?: mongoose.ClientSession
 ) {
   const itemKey = (item: Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand'>) =>
     normalizeProductId(item.productId) || `${normalizeProductText(item.productName)}|${normalizeProductText(item.unit)}|${normalizeProductText(item.brand)}`
 
-  const previousByKey = new Map(previousItems.map((item) => [itemKey(item), item]))
-  const nextByKey = new Map(nextItems.map((item) => [itemKey(item), item]))
+  const aggregate = <T extends (typeof previousItems)[number]>(items: T[]) => {
+    const result = new Map<string, T>()
+    for (const item of items) {
+      const key = itemKey(item)
+      const existing = result.get(key)
+      result.set(key, existing ? { ...existing, quantity: existing.quantity + item.quantity } : { ...item })
+    }
+    return result
+  }
+  const previousByKey = aggregate(previousItems)
+  const nextByKey = aggregate(nextItems)
   const keys = new Set([...previousByKey.keys(), ...nextByKey.keys()])
 
   for (const key of keys) {
@@ -210,7 +226,7 @@ async function reconcileByProductId(
     if (!prev && next) {
       const quantity = next.quantity
       const existing = await InventoryModel.findOne({
-        userId,
+        storeId: context.storeId,
         $or: [
           { productId: normalizeProductId(next.productId) },
           {
@@ -229,19 +245,20 @@ async function reconcileByProductId(
         existing.profitPercentage = next.profitPercentage ?? existing.profitPercentage
         existing.salePrice = next.salePrice ?? existing.salePrice
         existing.supplier = normalizeProductText(supplier) || existing.supplier
-        await applyDelta(existing, quantity, 'purchase', session)
+        existing.updatedBy = new mongoose.Types.ObjectId(context.actorId)
+        await applyDelta(context, existing, quantity, 'purchase', session)
         continue
       }
 
-      const created = new InventoryModel(buildPurchaseInventoryPayload(next, supplier ?? '', quantity, userId))
+      const created = new InventoryModel(buildPurchaseInventoryPayload(next, supplier ?? '', quantity, context))
       const saved = await created.save(session ? { session } : undefined)
-      await saveMovement(String(saved._id), 'Entrada', quantity, 'Entrada registrada por compra.', 'Compras', session)
+      await saveMovement(context, String(saved._id), 'Entrada', quantity, 'Entrada registrada por compra.', 'Compras', session)
       continue
     }
 
     if (prev && !next) {
       const existing = await InventoryModel.findOne({
-        userId,
+        storeId: context.storeId,
         $or: [
           { productId: normalizeProductId(prev.productId) },
           {
@@ -255,14 +272,14 @@ async function reconcileByProductId(
         throw new AppError('Item de estoque não encontrado para reverter a movimentação.', 404)
       }
 
-      await applyDelta(existing, -prev.quantity, 'purchase-revert', session)
+      await applyDelta(context, existing, -prev.quantity, 'purchase-revert', session)
       continue
     }
 
     if (prev && next) {
       const delta = next.quantity - prev.quantity
       const existing = await InventoryModel.findOne({
-        userId,
+        storeId: context.storeId,
         $or: [
           { productId: normalizeProductId(next.productId) },
           {
@@ -284,9 +301,10 @@ async function reconcileByProductId(
       existing.profitPercentage = next.profitPercentage ?? existing.profitPercentage
       existing.salePrice = next.salePrice ?? existing.salePrice
       existing.supplier = normalizeProductText(supplier) || existing.supplier
+      existing.updatedBy = new mongoose.Types.ObjectId(context.actorId)
 
       if (delta !== 0) {
-        await applyDelta(existing, delta, delta > 0 ? 'purchase' : 'purchase-revert', session)
+        await applyDelta(context, existing, delta, delta > 0 ? 'purchase' : 'purchase-revert', session)
       } else {
         await existing.save(session ? { session } : undefined)
       }
@@ -295,6 +313,7 @@ async function reconcileByProductId(
 }
 
 async function reconcileSaleByProductId(
+  context: StoreContext,
   previousItems: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'unitPrice' | 'salePrice' | 'product' | 'sku'>>,
   nextItems: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'unitPrice' | 'salePrice' | 'product' | 'sku'>>,
   session?: mongoose.ClientSession
@@ -302,8 +321,17 @@ async function reconcileSaleByProductId(
   const itemKey = (item: Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand'>) =>
     normalizeProductId(item.productId) || `${normalizeProductText(item.productName)}|${normalizeProductText(item.unit)}|${normalizeProductText(item.brand)}`
 
-  const previousByKey = new Map(previousItems.map((item) => [itemKey(item), item]))
-  const nextByKey = new Map(nextItems.map((item) => [itemKey(item), item]))
+  const aggregate = <T extends (typeof previousItems)[number]>(items: T[]) => {
+    const result = new Map<string, T>()
+    for (const item of items) {
+      const key = itemKey(item)
+      const existing = result.get(key)
+      result.set(key, existing ? { ...existing, quantity: existing.quantity + item.quantity } : { ...item })
+    }
+    return result
+  }
+  const previousByKey = aggregate(previousItems)
+  const nextByKey = aggregate(nextItems)
   const keys = new Set([...previousByKey.keys(), ...nextByKey.keys()])
 
   for (const key of keys) {
@@ -311,22 +339,22 @@ async function reconcileSaleByProductId(
     const next = nextByKey.get(key)
 
     if (!prev && next) {
-      const existing = await findInventoryByProduct(next, session)
+      const existing = await findInventoryByProduct(context, next, session)
       if (!existing) {
         throw new AppError('Item de estoque não encontrado para registrar a venda.', 404)
       }
 
-      await applyDelta(existing, -next.quantity, 'sale', session)
+      await applyDelta(context, existing, -next.quantity, 'sale', session)
       continue
     }
 
     if (prev && !next) {
-      const existing = await findInventoryByProduct(prev, session)
+      const existing = await findInventoryByProduct(context, prev, session)
       if (!existing) {
         throw new AppError('Item de estoque não encontrado para reverter a venda.', 404)
       }
 
-      await applyDelta(existing, prev.quantity, 'sale-revert', session)
+      await applyDelta(context, existing, prev.quantity, 'sale-revert', session)
       continue
     }
 
@@ -334,12 +362,12 @@ async function reconcileSaleByProductId(
       const delta = next.quantity - prev.quantity
       if (delta === 0) continue
 
-      const existing = await findInventoryByProduct(next, session)
+      const existing = await findInventoryByProduct(context, next, session)
       if (!existing) {
         throw new AppError('Item de estoque não encontrado para atualizar a venda.', 404)
       }
 
-      await applyDelta(existing, -delta, delta > 0 ? 'sale' : 'sale-revert', session)
+      await applyDelta(context, existing, -delta, delta > 0 ? 'sale' : 'sale-revert', session)
     }
   }
 }
@@ -385,12 +413,12 @@ function toMovementDTO(movement: InventoryMovementDocumentShape): InventoryMovem
   }
 }
 
-async function findInventoryByIdOrThrow(id: string, userId: string, session?: mongoose.ClientSession) {
+async function findInventoryByIdOrThrow(id: string, storeId: string, session?: mongoose.ClientSession) {
   if (!mongoose.isValidObjectId(id)) {
     throw new AppError('ID do estoque inválido.', 400)
   }
 
-  const item = await InventoryModel.findOne({ _id: id, userId }).session(session ?? null)
+  const item = await InventoryModel.findOne({ _id: id, storeId }).session(session ?? null)
   if (!item) {
     throw new AppError('Item de estoque não encontrado.', 404)
   }
@@ -398,10 +426,10 @@ async function findInventoryByIdOrThrow(id: string, userId: string, session?: mo
   return item
 }
 
-async function ensureUniqueInventory(input: CreateInventoryInput, userId: string, excludeId?: string) {
+async function ensureUniqueInventory(input: CreateInventoryInput, storeId: string, excludeId?: string) {
   const normalized = normalizeInventoryInput(input)
   const duplicate = await InventoryModel.findOne({
-    userId,
+    storeId,
     ...(excludeId ? { _id: { $ne: excludeId } } : {}),
     productName: normalized.productName,
     unit: normalized.unit,
@@ -416,15 +444,17 @@ async function ensureUniqueInventory(input: CreateInventoryInput, userId: string
 }
 
 async function createMovement(input: {
+  context: StoreContext
   itemId: string
   type: string
   quantity: number
   description: string
   user: string
-  userId: string
 }) {
   const movement = new InventoryMovementModel({
-    userId: input.userId,
+    storeId: input.context.storeId,
+    userId: input.context.actorId,
+    actorId: input.context.actorId,
     itemId: input.itemId,
     type: normalizeTextInput(input.type),
     quantity: input.quantity,
@@ -439,10 +469,10 @@ async function createMovement(input: {
 export const InventoryService = {
   async list(search?: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const parsed = inventoryListQuerySchema.parse({ search })
 
-    const filter: Record<string, unknown> = { userId: currentUser.id }
+    const filter: Record<string, unknown> = { storeId: context.storeId }
     if (parsed.search) {
       filter.$or = [
         { productName: { $regex: escapeRegExp(parsed.search), $options: 'i' } },
@@ -461,9 +491,9 @@ export const InventoryService = {
 
   async create(data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const parsed = inventoryCreateSchema.parse(data)
-    const normalized = await ensureUniqueInventory(parsed, currentUser.id)
+    const normalized = await ensureUniqueInventory(parsed, context.storeId)
     const product = normalizeProductText(parsed.product) || buildProductLabel(parsed.productName, parsed.unit, parsed.brand)
     const productId = parsed.productId?.trim() || new mongoose.Types.ObjectId().toString()
     const sku = normalizeProductText(parsed.sku) || `EST-${Date.now().toString().slice(-8)}`
@@ -474,7 +504,10 @@ export const InventoryService = {
     const profitPercentage = parsed.profitPercentage ?? calculateInventoryProfitPercentage(parsed.costPrice, parsed.salePrice)
 
     const created = await InventoryModel.create({
-      userId: currentUser.id,
+      storeId: context.storeId,
+      userId: context.actorId,
+      createdBy: context.actorId,
+      updatedBy: context.actorId,
       productId,
       product,
       sku,
@@ -483,13 +516,20 @@ export const InventoryService = {
       availableStock,
       profitPercentage,
       ...normalized,
+      category: normalizeProductText(parsed.category),
+      costPrice: parsed.costPrice,
+      salePrice: parsed.salePrice,
+      currentStock: parsed.currentStock,
+      reservedStock: parsed.reservedStock,
+      location: normalizeProductText(parsed.location),
+      supplier: normalizeProductText(parsed.supplier),
       minimumStock: DEFAULT_MINIMUM_STOCK,
       notes: normalizeProductText(parsed.notes),
     })
 
     if (created.currentStock > 0) {
       await createMovement({
-        userId: currentUser.id,
+        context,
         itemId: String(created._id),
         type: 'Entrada',
         quantity: created.currentStock,
@@ -503,30 +543,31 @@ export const InventoryService = {
 
   async getById(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    return toInventoryDTO(await findInventoryByIdOrThrow(id, currentUser.id))
+    const context = await requireStoreContext()
+    return toInventoryDTO(await findInventoryByIdOrThrow(id, context.storeId))
   },
 
   async updateMinimumStock(id: string, data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const parsed = inventoryMinimumStockSchema.parse(data)
-    const item = await findInventoryByIdOrThrow(id, currentUser.id)
+    const item = await findInventoryByIdOrThrow(id, context.storeId)
     item.minimumStock = parsed.minimumStock
+    item.updatedBy = new mongoose.Types.ObjectId(context.actorId)
     await item.save()
     return toInventoryDTO(item)
   },
 
   async update(id: string, data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const session = await mongoose.startSession()
 
     try {
       let updatedItem: InventoryDocumentShape | null = null
 
       await session.withTransaction(async () => {
-        const item = await findInventoryByIdOrThrow(id, currentUser.id, session)
+        const item = await findInventoryByIdOrThrow(id, context.storeId, session)
         const parsed = inventoryUpdateSchema.parse(data)
 
         const nextProductName = parsed.productName ?? item.productName
@@ -560,12 +601,12 @@ export const InventoryService = {
             lastOutputDate: parsed.lastOutputDate ?? item.lastOutputDate,
             product: parsed.product ?? item.product,
           },
-          currentUser.id,
+          context.storeId,
           id
         )
 
         const linkedProduct = await ProductModel.findOne({
-          userId: currentUser.id,
+          storeId: context.storeId,
           $or: [
             ...(mongoose.isValidObjectId(item.productId) ? [{ _id: item.productId }] : []),
             {
@@ -578,7 +619,7 @@ export const InventoryService = {
 
         if (linkedProduct) {
           const duplicateProduct = await ProductModel.findOne({
-            userId: currentUser.id,
+            storeId: context.storeId,
             _id: { $ne: linkedProduct._id },
             name: normalized.productName,
             unit: normalized.unit,
@@ -594,6 +635,7 @@ export const InventoryService = {
           linkedProduct.brand = normalized.brand
           linkedProduct.product = buildProductLabel(normalized.productName, normalized.unit, normalized.brand)
           linkedProduct.salePrice = nextSalePrice
+          linkedProduct.updatedBy = new mongoose.Types.ObjectId(context.actorId)
         }
 
         item.productName = normalized.productName
@@ -615,6 +657,7 @@ export const InventoryService = {
         item.notes = parsed.notes !== undefined ? normalizeTextInput(parsed.notes) : item.notes
         item.lastEntryDate = parsed.lastEntryDate !== undefined ? normalizeTextInput(parsed.lastEntryDate) : item.lastEntryDate
         item.lastOutputDate = parsed.lastOutputDate !== undefined ? normalizeTextInput(parsed.lastOutputDate) : item.lastOutputDate
+        item.updatedBy = new mongoose.Types.ObjectId(context.actorId)
 
         updatedItem = await item.save({ session })
         if (linkedProduct) {
@@ -634,37 +677,37 @@ export const InventoryService = {
 
   async remove(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    const item = await findInventoryByIdOrThrow(id, currentUser.id)
-    await InventoryMovementModel.deleteMany({ itemId: id, userId: currentUser.id })
+    const context = await requireStoreContext()
+    const item = await findInventoryByIdOrThrow(id, context.storeId)
+    await InventoryMovementModel.deleteMany({ itemId: id, storeId: context.storeId })
     await item.deleteOne()
     return { id: String(item._id), deleted: true }
   },
 
   async getMovements(itemId: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     if (!mongoose.isValidObjectId(itemId)) {
       throw new AppError('ID do estoque inválido.', 400)
     }
 
-    const movements = await InventoryMovementModel.find({ itemId, userId: currentUser.id }).sort({ date: -1 }).lean<InventoryMovementDocumentShape[]>()
+    const movements = await InventoryMovementModel.find({ itemId, storeId: context.storeId }).sort({ date: -1 }).lean<InventoryMovementDocumentShape[]>()
     return movements.map(toMovementDTO)
   },
 
   async getRecentMovements(limit = 5) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const parsed = inventoryMovementListQuerySchema.parse({ limit })
-    const movements = await InventoryMovementModel.find({ userId: currentUser.id }).sort({ date: -1 }).limit(parsed.limit ?? 5).lean<InventoryMovementDocumentShape[]>()
+    const movements = await InventoryMovementModel.find({ storeId: context.storeId }).sort({ date: -1 }).limit(parsed.limit ?? 5).lean<InventoryMovementDocumentShape[]>()
     return movements.map(toMovementDTO)
   },
 
   async reserveStock(productId: string, quantity: number) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const item = await InventoryModel.findOne({
-      userId: currentUser.id,
+      storeId: context.storeId,
       $or: [{ productId }, { _id: productId }, { sku: productId }],
     })
 
@@ -675,14 +718,15 @@ export const InventoryService = {
 
     item.reservedStock = nextReserved
     item.availableStock = calculateAvailableStock(item.currentStock, nextReserved)
+    item.updatedBy = new mongoose.Types.ObjectId(context.actorId)
     return toInventoryDTO(await item.save())
   },
 
   async releaseReservedStock(productId: string, quantity: number) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const item = await InventoryModel.findOne({
-      userId: currentUser.id,
+      storeId: context.storeId,
       $or: [{ productId }, { _id: productId }, { sku: productId }],
     })
 
@@ -690,14 +734,15 @@ export const InventoryService = {
 
     item.reservedStock = Math.max(0, item.reservedStock - quantity)
     item.availableStock = calculateAvailableStock(item.currentStock, item.reservedStock)
+    item.updatedBy = new mongoose.Types.ObjectId(context.actorId)
     return toInventoryDTO(await item.save())
   },
 
   async getByProductId(productId: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
+    const context = await requireStoreContext()
     const item = await InventoryModel.findOne({
-      userId: currentUser.id,
+      storeId: context.storeId,
       $or: [{ productId }, { _id: productId }, { sku: productId }],
     })
 
@@ -707,12 +752,12 @@ export const InventoryService = {
   async applyPurchaseItems(
     items: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'unitPrice' | 'profitPercentage' | 'salePrice' | 'product' | 'sku' | 'category'>>,
     supplier: string,
-    userId: string,
+    context: StoreContext,
     session?: mongoose.ClientSession
   ) {
     await connectToDatabase()
     for (const item of items) {
-      const existing = await findInventoryByProduct(item, session)
+      const existing = await findInventoryByProduct(context, item, session)
       if (existing) {
         existing.productName = normalizeProductText(item.productName)
         existing.unit = normalizeProductText(item.unit)
@@ -722,29 +767,29 @@ export const InventoryService = {
         existing.costPrice = item.unitPrice
         existing.salePrice = item.salePrice ?? existing.salePrice
         existing.supplier = normalizeProductText(supplier)
-        await applyDelta(existing, item.quantity, 'purchase', session)
+        await applyDelta(context, existing, item.quantity, 'purchase', session)
         continue
       }
 
-      const created = new InventoryModel(buildPurchaseInventoryPayload(item, supplier, item.quantity, userId))
+      const created = new InventoryModel(buildPurchaseInventoryPayload(item, supplier, item.quantity, context))
       const saved = await created.save(session ? { session } : undefined)
-      await saveMovement(String(saved._id), 'Entrada', item.quantity, 'Entrada registrada por compra.', 'Compras', session)
+      await saveMovement(context, String(saved._id), 'Entrada', item.quantity, 'Entrada registrada por compra.', 'Compras', session)
     }
   },
 
   async revertPurchaseItems(
     items: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'category'>>,
-    userId: string,
+    context: StoreContext,
     session?: mongoose.ClientSession
   ) {
     await connectToDatabase()
     for (const item of items) {
-      const existing = await findInventoryByProduct(item, session)
+      const existing = await findInventoryByProduct(context, item, session)
       if (!existing) {
         throw new AppError('Item de estoque não encontrado para reverter a compra.', 404)
       }
 
-      await applyDelta(existing, -item.quantity, 'purchase-revert', session)
+      await applyDelta(context, existing, -item.quantity, 'purchase-revert', session)
     }
   },
 
@@ -752,50 +797,50 @@ export const InventoryService = {
     previousItems: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'unitPrice' | 'profitPercentage' | 'salePrice' | 'product' | 'sku' | 'category'>>,
     nextItems: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'unitPrice' | 'profitPercentage' | 'salePrice' | 'product' | 'sku' | 'category'>>,
     supplier: string,
-    userId: string,
+    context: StoreContext,
     session?: mongoose.ClientSession
   ) {
-    return reconcileByProductId(previousItems, nextItems, supplier, userId, session)
+    return reconcileByProductId(context, previousItems, nextItems, supplier, session)
   },
 
   async applySaleItems(
     items: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'unitPrice' | 'salePrice' | 'product' | 'sku'>>,
-    userId: string,
+    context: StoreContext,
     session?: mongoose.ClientSession
   ) {
     await connectToDatabase()
     for (const item of items) {
-      const existing = await findInventoryByProduct(item, session)
+      const existing = await findInventoryByProduct(context, item, session)
       if (!existing) {
         throw new AppError('Item de estoque não encontrado para registrar a venda.', 404)
       }
 
-      await applyDelta(existing, -item.quantity, 'sale', session)
+      await applyDelta(context, existing, -item.quantity, 'sale', session)
     }
   },
 
   async revertSaleItems(
     items: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'unitPrice' | 'salePrice' | 'product' | 'sku'>>,
-    userId: string,
+    context: StoreContext,
     session?: mongoose.ClientSession
   ) {
     await connectToDatabase()
     for (const item of items) {
-      const existing = await findInventoryByProduct(item, session)
+      const existing = await findInventoryByProduct(context, item, session)
       if (!existing) {
         throw new AppError('Item de estoque não encontrado para reverter a venda.', 404)
       }
 
-      await applyDelta(existing, item.quantity, 'sale-revert', session)
+      await applyDelta(context, existing, item.quantity, 'sale-revert', session)
     }
   },
 
   async reconcileSaleItems(
     previousItems: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'unitPrice' | 'profitPercentage' | 'salePrice' | 'product' | 'sku'>>,
     nextItems: Array<Pick<InventorySyncItem, 'productId' | 'productName' | 'unit' | 'brand' | 'quantity' | 'unitPrice' | 'profitPercentage' | 'salePrice' | 'product' | 'sku'>>,
-    userId: string,
+    context: StoreContext,
     session?: mongoose.ClientSession
   ) {
-    return reconcileSaleByProductId(previousItems, nextItems, session)
+    return reconcileSaleByProductId(context, previousItems, nextItems, session)
   },
 }

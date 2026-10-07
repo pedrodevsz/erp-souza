@@ -418,11 +418,13 @@ export function calculateDeliverySummaryByPeriod(
 }
 
 export function getCurrentMonthSalesTotal(sales: Sale[], now: Date = new Date()) {
-  return sales.filter((sale) => isSameMonth(sale.saleDate, now)).reduce((sum, sale) => sum + sale.total, 0)
+  return sales
+    .filter((sale) => sale.status !== 'CANCELLED' && isSameMonth(sale.saleDate, now))
+    .reduce((sum, sale) => sum + sale.total, 0)
 }
 
 export function getCurrentMonthSalesCount(sales: Sale[], now: Date = new Date()) {
-  return sales.filter((sale) => isSameMonth(sale.saleDate, now)).length
+  return sales.filter((sale) => sale.status !== 'CANCELLED' && isSameMonth(sale.saleDate, now)).length
 }
 
 export function calculateGrossProfit(sales: Sale[], inventoryItems: InventoryItem[], now: Date = new Date()) {

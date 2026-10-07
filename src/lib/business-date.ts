@@ -1,10 +1,11 @@
 const BUSINESS_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
+export const BUSINESS_TIME_ZONE = 'America/Sao_Paulo' as const
 
 function pad(value: number) {
   return String(value).padStart(2, '0')
 }
 
-export function getTodayBusinessDate(now: Date = new Date(), timeZone = 'America/Sao_Paulo') {
+export function getTodayBusinessDate(now: Date = new Date(), timeZone: string = BUSINESS_TIME_ZONE) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
     .formatToParts(now)
     .filter((part) => part.type !== 'literal')

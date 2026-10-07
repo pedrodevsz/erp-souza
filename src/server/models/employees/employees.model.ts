@@ -4,7 +4,10 @@ import { DEFAULT_EMPLOYEE_ROLE, EMPLOYEE_ROLES, type EmployeeRole } from '@/lib/
 
 const employeeSchema = new Schema(
   {
+    storeId: { type: String, required: true, trim: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     name: { type: String, required: true, trim: true, index: true, set: normalizeTextInput },
     role: { type: String, required: true, enum: EMPLOYEE_ROLES, default: DEFAULT_EMPLOYEE_ROLE, index: true },
     phone: { type: String, trim: true, default: '' },

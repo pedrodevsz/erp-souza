@@ -115,7 +115,7 @@ function CustomerSaleActionSheet({
                   { label: 'É para entrega?', value: sale.isDelivery ? 'Sim' : 'Não' },
                   { label: 'Previsão de entrega', value: sale.deliveryDate ? formatBusinessDate(sale.deliveryDate) : 'Sem previsão' },
                   { label: 'Data da venda', value: formatBusinessDate(sale.saleDate) },
-                  { label: 'Status da entrega', value: sale.deliveryStatus === 'DELIVERED' ? 'Entregue' : 'Pendente' },
+                  { label: 'Status da entrega', value: sale.deliveryStatus === 'DELIVERED' ? 'Entregue' : sale.deliveryStatus === 'CANCELLED' ? 'Cancelada' : 'Pendente' },
                 ]}
               />
             </CardContent>

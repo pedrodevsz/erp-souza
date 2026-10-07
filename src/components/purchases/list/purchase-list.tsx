@@ -15,6 +15,7 @@ import { purchaseMessages, getFeedbackErrorMessage } from '@/lib/messages/feedba
 import { usePurchaseStore } from '@/stores/purchases/usePurchaseStore'
 import { getPurchaseCategoryChipClassName, getPurchaseCategoryLabel } from '@/lib/purchases'
 import { NewPurchaseMethodModal } from '@/components/purchases/new-purchase-method-modal'
+import { formatBusinessDate } from '@/lib/business-date'
 
 export function PurchaseList() {
     const router = useRouter()
@@ -132,7 +133,7 @@ export function PurchaseList() {
                                 ))}
                             </div>
                         </td>
-                        <td className="px-4 py-2 align-middle whitespace-nowrap">{p.purchaseDate.slice(0, 10)}</td>
+                        <td className="px-4 py-2 align-middle whitespace-nowrap">{formatBusinessDate(p.purchaseDate)}</td>
                         <td className="px-4 py-2 align-middle whitespace-nowrap">{p.invoiceNumber || 'Não informado'}</td>
                         <td className="px-4 py-2 align-middle whitespace-nowrap">R$ {p.total.toFixed(2)}</td>
                         <td className="px-4 py-2 align-middle whitespace-nowrap">

@@ -46,6 +46,7 @@ function normalizeSale(sale: ApiSale | null | undefined): Sale {
 
   return {
     id: sale?.id ?? '',
+    revision: sale?.revision ?? 0,
     customerId: sale?.customerId ?? '',
     customerName: sale?.customerName ?? '',
     sellerId: sale?.sellerId ?? '',

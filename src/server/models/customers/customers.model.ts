@@ -23,7 +23,10 @@ const customerAddressSchema = new Schema(
 
 const customerSchema = new Schema(
   {
+    storeId: { type: String, required: true, trim: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     name: { type: String, required: true, trim: true, set: normalizeTextInput },
     document: { type: String, trim: true, default: null, set: normalizeOptionalDigits },
     phone: { type: String, trim: true, default: null, set: normalizeOptionalDigits },
@@ -44,9 +47,9 @@ const customerSchema = new Schema(
   }
 )
 
-customerSchema.index({ userId: 1 }, { name: 'customer_user_lookup' })
+customerSchema.index({ storeId: 1 }, { name: 'customer_store_lookup' })
 customerSchema.index(
-  { userId: 1, document: 1 },
+  { storeId: 1, document: 1 },
   {
     unique: true,
     name: 'customer_user_document_unique',

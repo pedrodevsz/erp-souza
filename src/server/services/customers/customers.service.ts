@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 
 import { connectToDatabase } from '@/server/db/mongodb'
-import { requireCurrentUser } from '@/server/auth/current-user'
+import { requireStoreContext } from '@/server/auth/store-context'
 import { AppError } from '@/server/errors/app-error'
 import { CustomerModel, type CustomerDTO, type CustomerDocumentShape } from '@/server/models/customers/customers.model'
 import {
@@ -15,16 +15,6 @@ import { normalizeTextInput } from '@/lib/text'
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-let customerIndexesSync: Promise<void> | null = null
-
-async function ensureCustomerIndexes() {
-  if (!customerIndexesSync) {
-    customerIndexesSync = CustomerModel.syncIndexes().then(() => undefined)
-  }
-
-  await customerIndexesSync
 }
 
 function normalizePhone(value: unknown): string | null {
@@ -43,18 +33,6 @@ function normalizeDocument(value: unknown): string | null {
 
   const normalized = value.replace(/\D/g, '')
   return normalized.length > 0 ? normalized : null
-}
-
-async function migrateLegacyCustomerPaymentFields(userId: string) {
-  await CustomerModel.updateMany(
-    { userId, $or: [{ paymentReceived: { $exists: true } }, { paymentMethod: { $exists: true } }] },
-    {
-      $unset: {
-        paymentReceived: '',
-        paymentMethod: '',
-      },
-    }
-  )
 }
 
 function normalizeOptionalText(value: string | undefined) {
@@ -102,14 +80,14 @@ function toCustomerDTO(customer: CustomerDocumentShape): CustomerDTO {
   }
 }
 
-async function findCustomerOrThrow(id: string, userId: string) {
+async function findCustomerOrThrow(id: string, storeId: string) {
   const parsed = customerIdParamSchema.parse({ id })
 
   if (!mongoose.isValidObjectId(parsed.id)) {
     throw new AppError('ID do cliente inválido.', 400)
   }
 
-  const customer = await CustomerModel.findOne({ _id: parsed.id, userId })
+  const customer = await CustomerModel.findOne({ _id: parsed.id, storeId })
   if (!customer) {
     throw new AppError('Cliente não encontrado.', 404)
   }
@@ -117,7 +95,7 @@ async function findCustomerOrThrow(id: string, userId: string) {
   return customer
 }
 
-async function ensureDocumentIsUnique(document: string | undefined, userId: string, excludeId?: string) {
+async function ensureDocumentIsUnique(document: string | undefined, storeId: string, excludeId?: string) {
   const normalizedDocument = normalizeDocument(document)
 
   if (!normalizedDocument) {
@@ -125,7 +103,7 @@ async function ensureDocumentIsUnique(document: string | undefined, userId: stri
   }
 
   const duplicate = await CustomerModel.findOne({
-    userId,
+    storeId,
     document: normalizedDocument,
     ...(excludeId ? { _id: { $ne: excludeId } } : {}),
   }).lean<CustomerDocumentShape | null>()
@@ -140,13 +118,11 @@ async function ensureDocumentIsUnique(document: string | undefined, userId: stri
 export const CustomerService = {
   async list(search?: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await ensureCustomerIndexes()
-    await migrateLegacyCustomerPaymentFields(currentUser.id)
+    const context = await requireStoreContext()
 
     const parsed = customerListQuerySchema.parse({ search })
     const normalizedSearch = parsed.search ? normalizeDocument(parsed.search) : ''
-    const filter: Record<string, unknown> = { userId: currentUser.id }
+    const filter: Record<string, unknown> = { storeId: context.storeId }
     if (parsed.search) {
       filter.$or = [
         { name: { $regex: escapeRegExp(parsed.search), $options: 'i' } },
@@ -160,24 +136,23 @@ export const CustomerService = {
 
   async getById(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await ensureCustomerIndexes()
-    await migrateLegacyCustomerPaymentFields(currentUser.id)
-    return toCustomerDTO(await findCustomerOrThrow(id, currentUser.id))
+    const context = await requireStoreContext()
+    return toCustomerDTO(await findCustomerOrThrow(id, context.storeId))
   },
 
   async create(data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await ensureCustomerIndexes()
-    await migrateLegacyCustomerPaymentFields(currentUser.id)
+    const context = await requireStoreContext()
 
     const parsed = customerCreateSchema.parse(data)
     const phone = normalizePhone(parsed.phone)
-    const document = await ensureDocumentIsUnique(parsed.document, currentUser.id)
+    const document = await ensureDocumentIsUnique(parsed.document, context.storeId)
 
     const created = await CustomerModel.create({
-      userId: currentUser.id,
+      storeId: context.storeId,
+      userId: context.actorId,
+      createdBy: context.actorId,
+      updatedBy: context.actorId,
       name: normalizeTextInput(parsed.name),
       ...(document ? { document } : {}),
       ...(phone ? { phone } : {}),
@@ -190,15 +165,13 @@ export const CustomerService = {
 
   async update(id: string, data: unknown) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await ensureCustomerIndexes()
-    await migrateLegacyCustomerPaymentFields(currentUser.id)
+    const context = await requireStoreContext()
 
     const parsed = customerUpdateSchema.parse(data)
-    const customer = await findCustomerOrThrow(id, currentUser.id)
+    const customer = await findCustomerOrThrow(id, context.storeId)
 
     if (parsed.document !== undefined) {
-      const document = await ensureDocumentIsUnique(parsed.document, currentUser.id, customer.id)
+      const document = await ensureDocumentIsUnique(parsed.document, context.storeId, customer.id)
       customer.set('document', document)
     }
 
@@ -206,16 +179,15 @@ export const CustomerService = {
     if (parsed.phone !== undefined) customer.set('phone', normalizePhone(parsed.phone))
     if (parsed.notes !== undefined) customer.notes = normalizeTextInput(parsed.notes)
     if (parsed.addresses !== undefined) customer.set('addresses', normalizeAddresses(parsed.addresses))
+    customer.updatedBy = new mongoose.Types.ObjectId(context.actorId)
 
     return toCustomerDTO(await customer.save())
   },
 
   async remove(id: string) {
     await connectToDatabase()
-    const currentUser = await requireCurrentUser()
-    await ensureCustomerIndexes()
-    await migrateLegacyCustomerPaymentFields(currentUser.id)
-    const customer = await findCustomerOrThrow(id, currentUser.id)
+    const context = await requireStoreContext()
+    const customer = await findCustomerOrThrow(id, context.storeId)
     await customer.deleteOne()
     return { id: String(customer._id), deleted: true }
   },

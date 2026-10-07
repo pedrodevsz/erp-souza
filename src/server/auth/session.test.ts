@@ -18,3 +18,9 @@ test('sessão usa username no contrato e preserva o identificador normalizado', 
     role: 'ADMIN',
   })
 })
+
+test('sessão rejeita tokens malformados ou com segmentos extras sem lançar erro', async () => {
+  assert.equal(await verifySessionToken('x.y'), null)
+  assert.equal(await verifySessionToken('a.b.c'), null)
+  assert.equal(await verifySessionToken('apenas-um-segmento'), null)
+})

@@ -51,6 +51,7 @@ const saleItemSchema = new Schema(
 
 const saleHistorySchema = new Schema(
   {
+    actorId: { type: Schema.Types.ObjectId, ref: 'User' },
     id: { type: String, required: true, trim: true },
     saleId: { type: String, required: true, trim: true },
     action: { type: String, required: true, trim: true, set: normalizeTextInput },
@@ -63,7 +64,11 @@ const saleHistorySchema = new Schema(
 
 const saleSchema = new Schema(
   {
+    storeId: { type: String, required: true, trim: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    status: { type: String, required: true, enum: ['ACTIVE', 'CANCELLED'], default: 'ACTIVE', index: true },
     customerId: { type: String, required: true, trim: true, index: true },
     customerName: { type: String, required: true, trim: true, set: normalizeTextInput },
     sellerId: { type: String, required: true, trim: true, index: true },
@@ -73,7 +78,7 @@ const saleSchema = new Schema(
     deliveryStatus: {
       type: String,
       required: true,
-      enum: ['PENDING', 'DELIVERED'],
+      enum: ['PENDING', 'DELIVERED', 'CANCELLED'],
       default(this: SaleModelFields & { isDelivery?: boolean }) {
         return this.isDelivery ? 'PENDING' : 'DELIVERED'
       },
@@ -98,7 +103,8 @@ const saleSchema = new Schema(
   },
   {
     timestamps: true,
-    versionKey: false,
+    versionKey: '__v',
+    optimisticConcurrency: true,
     toJSON: {
       virtuals: true,
       transform: (_doc: unknown, ret: Record<string, unknown> & { _id?: unknown }) => {

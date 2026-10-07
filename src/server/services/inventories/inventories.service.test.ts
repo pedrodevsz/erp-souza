@@ -3,8 +3,11 @@ import test from 'node:test'
 import mongoose from 'mongoose'
 
 import { buildPurchaseInventoryPayload } from './inventories.service'
+import { SINGLE_STORE_ID, type StoreContext } from '@/server/auth/store-context'
 import { InventoryModel } from '@/server/models/inventories/inventories.model'
 import { inventoryCreateSchema, inventoryMinimumStockSchema, inventoryUpdateSchema } from '@/server/schemas/inventories/inventories.schema'
+
+const context: StoreContext = { storeId: SINGLE_STORE_ID, actorId: new mongoose.Types.ObjectId().toString(), role: 'USER' }
 
 test('inventoryCreateSchema aceita marca ausente ou vazia', () => {
   assert.equal(
@@ -62,7 +65,7 @@ test('buildPurchaseInventoryPayload preserva marca informada e normaliza ausênc
     },
     'PADEIRO',
     12,
-    'user-1'
+    context
   )
 
   assert.equal(withoutBrand.brand, '')
@@ -81,7 +84,7 @@ test('buildPurchaseInventoryPayload preserva marca informada e normaliza ausênc
     },
     'PADEIRO',
     5,
-    'user-1'
+    context
   )
 
   assert.equal(withBrand.brand, 'VOTORAN')
@@ -90,6 +93,7 @@ test('buildPurchaseInventoryPayload preserva marca informada e normaliza ausênc
 
 test('InventoryModel valida itens sem marca sem disparar required', () => {
   const withoutBrand = new InventoryModel({
+    storeId: SINGLE_STORE_ID,
     userId: new mongoose.Types.ObjectId(),
     productId: 'prod-1',
     productName: 'AREIA MÉDIA',
@@ -113,6 +117,7 @@ test('InventoryModel valida itens sem marca sem disparar required', () => {
   })
 
   const withoutBrandField = new InventoryModel({
+    storeId: SINGLE_STORE_ID,
     userId: new mongoose.Types.ObjectId(),
     productId: 'prod-2',
     productName: 'AREIA MÉDIA',

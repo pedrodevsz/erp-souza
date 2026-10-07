@@ -50,7 +50,8 @@ export function useSaleEditPage(id: string) {
   }, [findSaleById, id])
 
   const handleSubmit = async (payload: NewSale) => {
-    const updated = await updateSale(id, payload)
+    if (!state.sale) return
+    const updated = await updateSale(id, { ...payload, expectedRevision: state.sale.revision })
     if (!updated) {
       toast.push({
         title: 'Erro',
