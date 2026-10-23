@@ -15,6 +15,10 @@
     "audit:sale-dates": "node --import tsx scripts/audit-sale-dates.ts",
     "audit:store-scope": "node --import tsx scripts/audit-store-scope.ts",
     "audit:indexes": "node --import tsx scripts/manage-mongodb-indexes.ts",
+    "homolog:check": "node --import tsx scripts/check-homologation.ts",
+    "homolog:prepare-env": "node --import tsx scripts/prepare-homolog-env.ts",
+    "homolog:bootstrap-admin": "node --import tsx scripts/bootstrap-homolog-admin.ts",
+    "homolog:test": "node --import tsx --test tests/homologation.integration.test.ts",
     "migrate:store-scope": "node --import tsx scripts/migrate-store-scope.ts",
     "migrate:sale-dates": "node --import tsx scripts/migrate-legacy-sale-dates.ts"
   },
