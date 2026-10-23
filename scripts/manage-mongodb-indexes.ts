@@ -7,7 +7,7 @@ import { INDEX_PLAN_COLLECTIONS, MONGODB_INDEX_PLAN, type PlannedIndex } from '.
 
 loadEnvConfig(process.cwd())
 
-type Target = 'rehearsal' | 'production'
+type Target = 'homologation' | 'rehearsal' | 'production'
 
 function parseArgs(args: string[]) {
   const values = new Map<string, string>()
@@ -31,7 +31,9 @@ function parseArgs(args: string[]) {
   const uriEnv = values.get('--uri-env') ?? 'MONGODB_URI'
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(uriEnv)) throw new Error('--uri-env invalido.')
   const target = values.get('--target') as Target | undefined
-  if (apply && target !== 'rehearsal' && target !== 'production') throw new Error('--target rehearsal|production e obrigatorio com --apply.')
+  if (apply && !['homologation', 'rehearsal', 'production'].includes(target ?? '')) {
+    throw new Error('--target homologation|rehearsal|production e obrigatorio com --apply.')
+  }
   return { apply, database, uriEnv, target, confirm: values.get('--confirm'), snapshotEvidence: values.get('--snapshot-evidence') }
 }
 
@@ -161,7 +163,13 @@ async function main() {
       console.log(JSON.stringify(report, null, 2))
       return
     }
-    if (args.target === 'rehearsal') {
+    if (args.target === 'homologation') {
+      if (args.database !== 'erp_souza_homolog') throw new Error('Apply de homologacao aceita somente erp_souza_homolog.')
+      if (args.confirm !== 'APPLY_INDEX_PLAN_TO_ERP_SOUZA_HOMOLOG') throw new Error('Confirmacao de homologacao invalida.')
+      if (process.env.HOMOLOGATION_DATABASE_CONFIRMED !== 'erp_souza_homolog') {
+        throw new Error('Confirme previamente a finalidade do database com HOMOLOGATION_DATABASE_CONFIRMED=erp_souza_homolog.')
+      }
+    } else if (args.target === 'rehearsal') {
       const target = validateDestructiveMongoTestTarget(uri, process.env.ERP_INTEGRATION_RUN_ID, process.env.ATLAS_MONGODB_URI)
       await assertDisposableMongoMarker(db, target.runId)
       if (args.confirm !== 'APPLY_INDEX_PLAN_TO_DISPOSABLE_REHEARSAL') throw new Error('Confirmacao de rehearsal invalida.')

@@ -1,0 +1,54 @@
+services:
+  app:
+    build:
+      context: .
+      target: runner
+    env_file:
+      - .env.homolog.local
+    expose:
+      - "3000"
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2.10.2-alpine
+    depends_on:
+      - app
+    ports:
+      - "127.0.0.1:8443:443"
+    volumes:
+      - ./Caddyfile.homolog:/etc/caddy/Caddyfile:ro
+      - homolog_caddy_data:/data
+      - homolog_caddy_config:/config
+    restart: unless-stopped
+
+  bootstrap-admin:
+    profiles: ["tools"]
+    build:
+      context: .
+      target: builder
+    env_file:
+      - .env.homolog.local
+    command: ["pnpm", "homolog:bootstrap-admin"]
+
+  index-manager:
+    profiles: ["tools"]
+    build:
+      context: .
+      target: builder
+    env_file:
+      - .env.homolog.local
+    command:
+      - pnpm
+      - audit:indexes
+      - --
+      - --database
+      - erp_souza_homolog
+      - --target
+      - homologation
+      - --confirm
+      - APPLY_INDEX_PLAN_TO_ERP_SOUZA_HOMOLOG
+      - --apply
+
+volumes:
+  homolog_caddy_data:
+  homolog_caddy_config:
