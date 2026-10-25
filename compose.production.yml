@@ -1,0 +1,41 @@
+name: erp-souza-production
+
+services:
+  app:
+    image: erp-souza-app:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    env_file:
+      - .env.production.local
+    expose:
+      - "3000"
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  proxy:
+    image: caddy:2.10.2-alpine
+    depends_on:
+      - app
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+    volumes:
+      - ./Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - production_caddy_data:/data
+      - production_caddy_config:/config
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  production_caddy_data:
+  production_caddy_config:
